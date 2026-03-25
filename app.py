@@ -159,7 +159,6 @@ CREATE TABLE IF NOT EXISTS payments (
 # Note: In SQLite, SERIAL and SERIAL PRIMARY KEY are not keywords, we need a slight adjustment.
 if not DATABASE_URL:
     SCHEMA = SCHEMA.replace("SERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
-"""
 
 def get_db():
     if "db" not in g:
