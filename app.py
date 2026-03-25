@@ -6,8 +6,12 @@ import hashlib
 import secrets
 import sqlite3
 import base64
-import psycopg2
-from psycopg2.extras import RealDictCursor
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+except ImportError:
+    psycopg2 = None
+    RealDictCursor = None
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from flask import Flask, request, jsonify, g, send_from_directory, send_file
