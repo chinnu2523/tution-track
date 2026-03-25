@@ -839,8 +839,6 @@ function updateStats(){
   const paid=students.filter(s=>s.months[cm]).length;
   const unpaid=students.length-paid;
   document.getElementById('hTotal').textContent=students.length;
-  document.getElementById('hPaid').textContent=paid;
-  document.getElementById('hDue').textContent=unpaid;
   document.getElementById('cTotal').textContent=students.length;
   const col=students.filter(s=>s.months[cm]).reduce((a,s)=>a+Number(s.monthlyFee||0),0);
   const pen=students.filter(s=>!s.months[cm]).reduce((a,s)=>a+Number(s.monthlyFee||0),0);
@@ -853,6 +851,54 @@ function updateStats(){
   document.getElementById('cPendSub').textContent=`${unpaid} students pending`;
   document.getElementById('bar2').style.width=tot>0?(col/tot*100)+'%':'0%';
   document.getElementById('bar3').style.width=tot>0?(pen/tot*100)+'%':'0%';
+}
+
+async function updateDashboard() {
+    const {data} = await api('/api/dashboard/stats');
+    if(!data.ok) return;
+    
+    document.getElementById('hTotal').textContent = data.total_students;
+    document.getElementById('hMonthlyColl').textContent = '₹' + data.monthly_collection.toLocaleString();
+    document.getElementById('hPending').textContent = data.pending_fee_students;
+    document.getElementById('hOverdue').textContent = data.overdue_list.length;
+    
+    // Update Recent Payments
+    const rpList = document.getElementById('recentPaymentsList');
+    if(data.recent_payments && data.recent_payments.length > 0) {
+        rpList.innerHTML = data.recent_payments.map(p => `
+            <div style="display:flex; justify-content:space-between; padding:10px; background:rgba(255,255,255,0.03); border-radius:8px; border-left:3px solid var(--accent)">
+                <div>
+                    <div style="font-weight:600">${esc(p.name)}</div>
+                    <div style="font-size:11px; color:var(--text3)">${p.month} — ${p.mode}</div>
+                </div>
+                <div style="text-align:right">
+                    <div class="g" style="font-weight:600">₹${p.amount}</div>
+                    <div style="font-size:11px; color:var(--text3)">${fmtD(p.paid_at)}</div>
+                </div>
+            </div>
+        `).join('');
+    } else {
+        rpList.innerHTML = '<div style="color:var(--text3); text-align:center; padding:20px;">No recent payments</div>';
+    }
+
+    // Update Quick Overdue
+    const odList = document.getElementById('quickOverdueList');
+    if(data.overdue_list && data.overdue_list.length > 0) {
+        odList.innerHTML = data.overdue_list.map(o => `
+            <div style="display:flex; justify-content:space-between; padding:10px; background:rgba(255,100,100,0.05); border-radius:8px; border-left:3px solid var(--danger)">
+                <div>
+                    <div style="font-weight:600">${esc(o.name)}</div>
+                    <div style="font-size:11px; color:var(--text3)">${esc(o.phone)}</div>
+                </div>
+                <div style="text-align:right">
+                    <div class="r" style="font-weight:600">₹${o.amount}</div>
+                    <button class="btn" style="padding:2px 8px; font-size:10px; margin-top:4px" onclick="openEditModal(${o.id})">Fix</button>
+                </div>
+            </div>
+        `).join('');
+    } else {
+        odList.innerHTML = '<div style="color:var(--text3); text-align:center; padding:20px;">All fees clear! 🎉</div>';
+    }
 }
 
 function updateFilters(){

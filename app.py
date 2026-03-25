@@ -15,6 +15,7 @@ except ImportError:
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from flask import Flask, request, jsonify, g, send_from_directory, send_file
+from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
 DATABASE_URL = os.environ.get("DATABASE_URL") # Provided by Render.com
@@ -22,6 +23,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "tuition.db")
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
 app = Flask(__name__)
+CORS(app)
 app.secret_key = secrets.token_hex(32)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
