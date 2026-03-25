@@ -425,7 +425,7 @@ tbody td.mcell{text-align:center;padding:12px 2px;}
           </div>
         </div>
         <button class="btn-login admin" onclick="adminLogin()">Sign In as Admin</button>
-        <div class="login-hint">Default: <strong>admin</strong> / <strong>admin123</strong> — change after first login</div>
+        <div class="login-hint">Default: <strong>magi</strong> / <strong>magi@1982</strong> — smart fee tracking</div>
       </div>
     </div>
 
@@ -502,70 +502,108 @@ tbody td.mcell{text-align:center;padding:12px 2px;}
   <main>
     <!-- Cards -->
     
-    <div class="summary-grid">
-      <div class="scard c1"><div class="scard-glow"></div><div class="scard-icon">👥</div><div class="scard-label">Total Students</div><div class="scard-value" id="hTotal">0</div></div>
-      <div class="scard c2"><div class="scard-glow"></div><div class="scard-icon">💰</div><div class="scard-label">Monthly Collection</div><div class="scard-value" id="hMonthlyColl">₹0</div></div>
-      <div class="scard c3"><div class="scard-glow"></div><div class="scard-icon">⏳</div><div class="scard-label">Pending Fees</div><div class="scard-value" id="hPending">0</div></div>
-      <div class="scard c4"><div class="scard-glow"></div><div class="scard-icon">⚠️</div><div class="scard-label">Overdue List</div><div class="scard-value" id="hOverdue">0</div></div>
-    </div>
-    
-    <div style="display:grid; grid-template-columns: 1.5fr 1fr; gap:20px; margin-bottom:20px;">
-      <div class="cpwd-section">
-        <h3>Recent Payments</h3>
-        <div id="recentPaymentsList" style="font-size:13px; display:flex; flex-direction:column; gap:10px;">
-          <div style="color:var(--text3)">Loading recent payments...</div>
+    <!-- Sections will be managed by showPage -->
+    <div id="adminDashboardSection">
+      <div class="summary-grid">
+        <div class="scard c1"><div class="scard-glow"></div><div class="scard-icon">👥</div><div class="scard-label">Total Students</div><div class="scard-value" id="hTotal">0</div></div>
+        <div class="scard c2"><div class="scard-glow"></div><div class="scard-icon">💰</div><div class="scard-label">Monthly Collection</div><div class="scard-value" id="hMonthlyColl">₹0</div></div>
+        <div class="scard c3"><div class="scard-glow"></div><div class="scard-icon">⏳</div><div class="scard-label">Pending Fees</div><div class="scard-value" id="hPending">0</div></div>
+        <div class="scard c4"><div class="scard-glow"></div><div class="scard-icon">⚠️</div><div class="scard-label">Overdue List</div><div class="scard-value" id="hOverdue">0</div></div>
+      </div>
+      
+      <div style="display:grid; grid-template-columns: 1.5fr 1fr; gap:20px; margin-bottom:20px;">
+        <div class="cpwd-section">
+          <h3>Recent Payments</h3>
+          <div id="recentPaymentsList" style="font-size:13px; display:flex; flex-direction:column; gap:10px;">
+            <div style="color:var(--text3)">Loading recent payments...</div>
+          </div>
+        </div>
+        <div class="cpwd-section">
+          <h3>Quick Overdue List</h3>
+          <div id="quickOverdueList" style="font-size:13px; display:flex; flex-direction:column; gap:10px;">
+            <div style="color:var(--text3)">No overdue payments currently.</div>
+          </div>
         </div>
       </div>
+
+      <div class="toolbar">
+        <div class="search-wrap">
+          <svg class="si" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <input type="text" class="search-input" id="searchInput" placeholder="Search student, school, class…">
+        </div>
+        <select class="fsel" id="filterClass"><option value="">All Classes</option></select>
+        <select class="fsel" id="filterSchool"><option value="">All Schools</option></select>
+        <select class="fsel" id="filterMonth"><option value="">Month</option></select>
+        <select class="fsel" id="filterStatus"><option value="">Any Status</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select>
+        <button class="btn btn-secondary" onclick="exportCSV()"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>CSV</button>
+        <button class="btn btn-primary" onclick="openAddModal()"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Student</button>
+      </div>
+
+      <div class="table-wrap">
+        <div class="table-scroll">
+          <table id="stuTable"><thead><tr id="theadRow"></tr></thead><tbody id="tbody"></tbody></table>
+        </div>
+        <div id="emptyState" class="empty-state" style="display:none">
+          <div class="ei">🎓</div><div class="et">No students yet</div><div class="es">Click "Add Student" to get started</div>
+        </div>
+        <div class="table-foot"><span id="tCount">0 students</span><span id="tMonthLabel"></span></div>
+      </div>
+    </div>
+
+    <div id="enquiriesSection" style="display:none">
+      <div class="toolbar">
+        <h2 style="font-family:'Syne',sans-serif">📞 Enquiries</h2>
+        <div style="flex:1"></div>
+        <button class="btn btn-primary" onclick="openOv('addEnquiryModal')">New Enquiry</button>
+      </div>
+      <div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>Name</th><th>Phone</th><th>Grade</th><th>Status</th><th>Date</th><th>Action</th></tr></thead><tbody id="enquiryTableBody"></tbody></table></div></div>
+    </div>
+
+    <div id="batchesSection" style="display:none">
+      <div class="toolbar">
+        <h2 style="font-family:'Syne',sans-serif">🕒 Batches</h2>
+        <div style="flex:1"></div>
+        <button class="btn btn-primary" onclick="openOv('addBatchModal')">New Batch</button>
+      </div>
+      <div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>Name</th><th>Subject</th><th>Timing</th><th>Teacher</th><th>Room</th></tr></thead><tbody id="batchTableBody"></tbody></table></div></div>
+    </div>
+
+    <div id="examsSection" style="display:none">
+      <div class="toolbar">
+        <h2 style="font-family:'Syne',sans-serif">📝 Exams & Results</h2>
+        <div style="flex:1"></div>
+        <button class="btn btn-primary" onclick="openOv('addExamModal')">New Exam</button>
+      </div>
+      <div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>Date</th><th>Title</th><th>Max Marks</th><th>Class</th><th>Action</th></tr></thead><tbody id="examTableBody"></tbody></table></div></div>
+    </div>
+
+    <div id="settingsSection" style="display:none">
+      <h2 style="font-family:'Syne',sans-serif; margin-bottom:20px;">⚙️ Settings</h2>
+      
       <div class="cpwd-section">
-        <h3>Quick Overdue List</h3>
-        <div id="quickOverdueList" style="font-size:13px; display:flex; flex-direction:column; gap:10px;">
-          <div style="color:var(--text3)">No overdue payments currently.</div>
+        <h3>🔐 Change Admin Password</h3>
+        <div class="pwd-row">
+          <div class="fg"><label>Current Password</label><input type="password" id="curPwd" placeholder="Current"></div>
+          <div class="fg"><label>New Password</label><input type="password" id="newPwd" placeholder="Min 6 chars"></div>
+          <div class="fg"><label>Confirm New</label><input type="password" id="confPwd" placeholder="Confirm"></div>
+          <button class="btn btn-secondary" onclick="changePwd()">Update</button>
         </div>
       </div>
-    </div>
-<div class="scard-icon">👥</div><div class="scard-label">Total Students</div><div class="scard-value" id="cTotal">0</div><div class="scard-sub">enrolled</div><div class="scard-bar"><div class="scard-bar-fill" id="bar1" style="width:100%"></div></div></div>
-      <div class="scard c2"><div class="scard-glow"></div><div class="scard-icon">✅</div><div class="scard-label">Collected</div><div class="scard-value" id="cCollected">₹0</div><div class="scard-sub" id="cCollSub">this month</div><div class="scard-bar"><div class="scard-bar-fill" id="bar2" style="width:0%"></div></div></div>
-      <div class="scard c3"><div class="scard-glow"></div><div class="scard-icon">⏳</div><div class="scard-label">Pending</div><div class="scard-value" id="cPending">₹0</div><div class="scard-sub" id="cPendSub">this month</div><div class="scard-bar"><div class="scard-bar-fill" id="bar3" style="width:0%"></div></div></div>
-      <div class="scard c4"><div class="scard-glow"></div><div class="scard-icon">💰</div><div class="scard-label">Total Revenue</div><div class="scard-value" id="cRevenue">₹0</div><div class="scard-sub">all time</div><div class="scard-bar"><div class="scard-bar-fill" id="bar4" style="width:100%"></div></div></div>
-    </div>
-    <!-- Change Password -->
-    <div class="cpwd-section">
-      <h3>🔐 Change Admin Password</h3>
-      <div class="pwd-row">
-        <div class="fg"><label>Current Password</label><input type="password" id="curPwd" placeholder="Current"></div>
-        <div class="fg"><label>New Password</label><input type="password" id="newPwd" placeholder="Min 6 chars"></div>
-        <div class="fg"><label>Confirm New</label><input type="password" id="confPwd" placeholder="Confirm"></div>
-        <button class="btn btn-secondary" onclick="changePwd()" style="margin-bottom:1px">Update</button>
+
+      <div class="cpwd-section">
+        <h3>🏫 Tuition Center Profile</h3>
+        <div class="fgrid">
+          <div class="fg"><label>Center Name</label><input type="text" id="setCenterName" placeholder="e.g. Smart Academy"></div>
+          <div class="fg"><label>Contact Number</label><input type="text" id="setCenterPhone" placeholder="Phone"></div>
+          <div class="fg full"><label>Address</label><input type="text" id="setCenterAddress" placeholder="Full address"></div>
+        </div>
+        <button class="btn btn-primary" onclick="saveSettings()" style="margin-top:15px">Save Profile</button>
       </div>
-    </div>
-    <!-- Toolbar -->
-    <div class="toolbar">
-      <div class="search-wrap">
-        <svg class="si" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-        <input type="text" class="search-input" id="searchInput" placeholder="Search student, school, class…">
-      </div>
-      <select class="fsel" id="filterClass"><option value="">All Classes</option></select>
-      <select class="fsel" id="filterSchool"><option value="">All Schools</option></select>
-      <select class="fsel" id="filterMonth"><option value="">Month</option></select>
-      <select class="fsel" id="filterStatus"><option value="">Any Status</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select>
-      <button class="btn btn-secondary" onclick="exportCSV()">
-        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>CSV
-      </button>
-      <button class="btn btn-primary" onclick="openAddModal()">
-        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Student
-      </button>
-    </div>
-    <!-- Table -->
-    <div class="table-wrap">
-      <div class="table-scroll">
-        <table id="stuTable"><thead><tr id="theadRow"></tr></thead><tbody id="tbody"></tbody></table>
-      </div>
-      <div id="emptyState" class="empty-state" style="display:none">
-        <div class="ei">🎓</div><div class="et">No students yet</div><div class="es">Click "Add Student" to get started</div>
-      </div>
-      <div class="table-foot">
-        <span id="tCount">0 students</span>
-        <span id="tMonthLabel"></span>
+
+      <div class="cpwd-section">
+        <h3>💾 Data Management</h3>
+        <p style="font-size:13px; color:var(--text2); margin-bottom:15px">Always keep a backup of your database.</p>
+        <button class="btn btn-secondary" onclick="exportBackup()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> Download SQL Backup</button>
       </div>
     </div>
   </main>
@@ -652,49 +690,8 @@ const CM=new Date().getMonth(), CY=new Date().getFullYear();
 let students=[], editId=null, delId=null, fmM={}, curRole=null, loggedStu=null;
 
 // ══════════════════════════════════════════════════════
-//  CREDENTIALS
+//  UI UTILS
 // ══════════════════════════════════════════════════════
-function getCreds(){try{const r=localStorage.getItem(CRED_SK);if(r)return JSON.parse(r);}catch(e){}return{username:'admin',password:'admin123'};}
-function saveCreds(o){localStorage.setItem(CRED_SK,JSON.stringify(o));}
-
-// ══════════════════════════════════════════════════════
-//  AUTH
-// ══════════════════════════════════════════════════════
-function adminLogin(){
-  const u=document.getElementById('adminUser').value.trim();
-  const p=document.getElementById('adminPass').value;
-  const c=getCreds();
-  if(u===c.username&&p===c.password){
-    curRole='admin';
-    localStorage.setItem(AUTH_SK,JSON.stringify({role:'admin',user:u,ts:Date.now()}));
-    document.getElementById('adminUDisplay').textContent=u;
-    showPage('adminPage');renderTable();updateStats();updateFilters();
-    toast('Welcome back, '+u+'!','s');
-  }else{
-    document.getElementById('adminErrMsg').textContent='Incorrect username or password.';
-    showErr('adminErr');
-    document.getElementById('adminPass').value='';
-  }
-}
-
-function studentLogin(){
-  const name=document.getElementById('stuName').value.trim().toLowerCase();
-  const phone=document.getElementById('stuPhone').value.trim().replace(/\D/g,'');
-  if(!name){showErr('stuErr','Please enter your name.');return;}
-  if(!phone){showErr('stuErr','Please enter phone number.');return;}
-  const found=students.find(s=>s.name.toLowerCase().includes(name)&&s.phone.replace(/\D/g,'')===phone);
-  if(found){
-    curRole='student';loggedStu=found;
-    localStorage.setItem(AUTH_SK,JSON.stringify({role:'student',id:found.id,ts:Date.now()}));
-    document.getElementById('stuDispName').textContent=found.name;
-    document.getElementById('stuAvChar').textContent=found.name[0].toUpperCase();
-    renderStudentPortal(found);showPage('studentPage');
-    toast('Welcome, '+found.name+'!','s');
-  }else{
-    showErr('stuErr','No student found with that name and phone. Please check your details.');
-  }
-}
-
 function showErr(id,msg){
   const el=document.getElementById(id);
   if(msg){
@@ -705,47 +702,6 @@ function showErr(id,msg){
   setTimeout(()=>el.classList.remove('show'),4000);
 }
 
-function logout(){
-  localStorage.removeItem(AUTH_SK);
-  curRole=null;loggedStu=null;
-  ['adminUser','adminPass','stuName','stuPhone'].forEach(id=>document.getElementById(id).value='');
-  showPage('loginPage');toast('Logged out','i');
-}
-
-function restoreSession(){
-  try{
-    const r=localStorage.getItem(AUTH_SK);if(!r)return false;
-    const s=JSON.parse(r);
-    if(Date.now()-s.ts>8*3600*1000){localStorage.removeItem(AUTH_SK);return false;}
-    if(s.role==='admin'){
-      curRole='admin';document.getElementById('adminUDisplay').textContent=s.user||'Admin';
-      showPage('adminPage');renderTable();updateStats();updateFilters();return true;
-    }
-    if(s.role==='student'){
-      const stu=students.find(x=>x.id===s.id);
-      if(stu){
-        curRole='student';loggedStu=stu;
-        document.getElementById('stuDispName').textContent=stu.name;
-        document.getElementById('stuAvChar').textContent=stu.name[0].toUpperCase();
-        renderStudentPortal(stu);showPage('studentPage');return true;
-      }
-    }
-  }catch(e){}return false;
-}
-
-function changePwd(){
-  const cur=document.getElementById('curPwd').value;
-  const nw=document.getElementById('newPwd').value;
-  const cf=document.getElementById('confPwd').value;
-  const c=getCreds();
-  if(cur!==c.password){toast('Current password incorrect','e');return;}
-  if(nw.length<6){toast('New password must be at least 6 characters','e');return;}
-  if(nw!==cf){toast('Passwords do not match','e');return;}
-  saveCreds({username:c.username,password:nw});
-  ['curPwd','newPwd','confPwd'].forEach(id=>document.getElementById(id).value='');
-  toast('Password updated!','s');
-}
-
 function togglePwd(id){
   const i=document.getElementById(id);
   i.type=i.type==='password'?'text':'password';
@@ -754,12 +710,82 @@ function togglePwd(id){
 // ══════════════════════════════════════════════════════
 //  PAGES
 // ══════════════════════════════════════════════════════
-function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');}
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
 function selectRole(role){
   document.getElementById('tab-admin').classList.toggle('active',role==='admin');
   document.getElementById('tab-student').classList.toggle('active',role==='student');
   document.getElementById('adminLoginForm').style.display=role==='admin'?'block':'none';
   document.getElementById('studentLoginForm').style.display=role==='student'?'block':'none';
+}
+
+// ══════════════════════════════════════════════════════
+//  ADMIN NAVIGATION
+// ══════════════════════════════════════════════════════
+function showSection(sid) {
+    const sections = ['adminDashboardSection', 'enquiriesSection', 'batchesSection', 'examsSection', 'settingsSection'];
+    sections.forEach(s => document.getElementById(s).style.display = s === sid ? 'block' : 'none');
+}
+
+function showEnquiries() { showSection('enquiriesSection'); loadEnquiries(); }
+function showBatches() { showSection('batchesSection'); loadBatches(); }
+function showExams() { showSection('examsSection'); loadExams(); }
+function showSettings() { showSection('settingsSection'); }
+
+async function loadEnquiries() {
+    const {data} = await api('/api/enquiries');
+    if(!data.ok) return;
+    const body = document.getElementById('enquiryTableBody');
+    body.innerHTML = data.enquiries.map(e => `
+        <tr>
+            <td><strong>${esc(e.name)}</strong></td>
+            <td>${esc(e.phone)}</td>
+            <td>${esc(e.grade || '—')}</td>
+            <td><span class="cbadge" style="background:rgba(245,158,11,0.1); color:var(--amber)">${esc(e.status)}</span></td>
+            <td>${fmtD(e.created_at)}</td>
+            <td><button class="btn btn-sm btn-secondary" onclick="updateEnqStatus(${e.id})">Enroll</button></td>
+        </tr>
+    `).join('') || '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text3)">No enquiries found</td></tr>';
+}
+
+async function loadBatches() {
+    const {data} = await api('/api/batches');
+    if(!data.ok) return;
+    const body = document.getElementById('batchTableBody');
+    body.innerHTML = data.batches.map(b => `
+        <tr>
+            <td><strong>${esc(b.name)}</strong></td>
+            <td>${esc(b.subject)}</td>
+            <td>${esc(b.time)} (${esc(b.days)})</td>
+            <td>${esc(b.teacher)}</td>
+            <td>${esc(b.room || '—')}</td>
+        </tr>
+    `).join('') || '<tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text3)">No batches found</td></tr>';
+}
+
+async function loadExams() {
+    const {data} = await api('/api/exams');
+    if(!data.ok) return;
+    const body = document.getElementById('examTableBody');
+    body.innerHTML = data.exams.map(e => `
+        <tr>
+            <td>${fmtD(e.date)}</td>
+            <td><strong>${esc(e.title)}</strong></td>
+            <td>${e.max_marks}</td>
+            <td>${esc(e.class_name || 'All')}</td>
+            <td><button class="btn btn-sm btn-primary" onclick="openMarksModal(${e.id}, '${esc(e.title)}')">Enter Marks</button></td>
+        </tr>
+    `).join('') || '<tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text3)">No exams scheduled</td></tr>';
+}
+
+function exportBackup() { window.open('/api/admin/backup', '_blank'); }
+
+async function saveSettings() {
+    const name = document.getElementById('setCenterName').value;
+    localStorage.setItem('tt_center_name', name);
+    toast('Settings saved locally', 's');
 }
 
 // ══════════════════════════════════════════════════════
@@ -1406,11 +1432,107 @@ async function confirmDelete() {
     await loadData(); updateDashboard(); renderTable(); updateStats(); updateFilters();
 }
 
+async function saveEnquiry() {
+    const name = document.getElementById('enqName').value;
+    const phone = document.getElementById('enqPhone').value;
+    const grade = document.getElementById('enqGrade').value;
+    const notes = document.getElementById('enqNotes').value;
+    if(!name || !phone) { toast('Name and Phone are required', 'e'); return; }
+    const {data} = await api('/api/enquiries', 'POST', {name, phone, grade, notes});
+    if(data.ok) {
+        toast('Enquiry saved!', 's');
+        closeOv('addEnquiryModal');
+        loadEnquiries();
+    }
+}
+
+async function saveBatch() {
+    const name = document.getElementById('btName').value;
+    const time = document.getElementById('btTime').value;
+    const days = document.getElementById('btDays').value;
+    const subject = document.getElementById('btSub').value;
+    const teacher = document.getElementById('btTeacher').value;
+    if(!name || !time) { toast('Name and Time required', 'e'); return; }
+    const {data} = await api('/api/batches', 'POST', {name, time, days, subject, teacher});
+    if(data.ok) {
+        toast('Batch created!', 's');
+        closeOv('addBatchModal');
+        loadBatches();
+    }
+}
+
+async function saveExam() {
+    const title = document.getElementById('exTitle').value;
+    const max = document.getElementById('exMax').value;
+    const date = document.getElementById('exDate').value;
+    if(!title || !date) { toast('Title and Date required', 'e'); return; }
+    const {data} = await api('/api/exams', 'POST', {title, max_marks: max, date});
+    if(data.ok) {
+        toast('Exam scheduled!', 's');
+        closeOv('addExamModal');
+        loadExams();
+    }
+}
+
+let activeExamId = null;
+async function openMarksModal(eid, title) {
+    activeExamId = eid;
+    const list = document.getElementById('marksEntryList');
+    list.innerHTML = 'Loading students...';
+    openOv('marksModal');
+    
+    // Fetch all students and existing marks
+    const [sRes, mRes] = await Promise.all([
+        api('/api/students'),
+        api('/api/exams/'+eid+'/marks')
+    ]);
+    
+    if(sRes.data.ok && mRes.data.ok) {
+        const marksMap = {};
+        mRes.data.marks.forEach(m => marksMap[m.student_id] = m.marks_obtained);
+        
+        list.innerHTML = sRes.data.students.map(s => `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; background:var(--surface2); border-radius:8px;">
+                <div style="font-weight:600">${esc(s.name)} <span style="font-size:11px; color:var(--text3)">(${esc(s.class)})</span></div>
+                <input type="number" class="field-input m-input" data-sid="${s.id}" value="${marksMap[s.id] || ''}" style="width:80px; text-align:center;" placeholder="Mark">
+            </div>
+        `).join('') || 'No students enrolled';
+    }
+}
+
+async function submitMarks() {
+    if(!activeExamId) return;
+    const marks = [];
+    document.querySelectorAll('.m-input').forEach(i => {
+        if(i.value !== '') marks.push({student_id: i.dataset.sid, marks_obtained: Number(i.value)});
+    });
+    const {data} = await api('/api/exams/'+activeExamId+'/marks', 'POST', {marks});
+    if(data.ok) {
+        toast('Marks saved successfully!', 's');
+        closeOv('marksModal');
+    }
+}
+
+async function updateEnqStatus(eid) {
+    // For now just mark as Enrolled, real enrollment would create a student
+    const {data} = await api('/api/enquiries/'+eid+'/status', 'PUT', {status: 'Enrolled'});
+    if(data.ok) {
+        toast('Status updated', 's');
+        loadEnquiries();
+    }
+}
+
 window.seedDemo = function() {};
 
 window.onload = async () => {
   const restored = await restoreSession();
   if(!restored) showPage('loginPage');
+  else showSection('adminDashboardSection'); // Default to dashboard
+  
+  // Set center name from localstorage
+  const cn = localStorage.getItem('tt_center_name');
+  if(cn) document.querySelectorAll('.logo-name').forEach(el => el.innerHTML = `${esc(cn)}<span>Track</span>`);
+
   setTimeout(()=>{
     const ls = document.getElementById('loadScreen');
     if(ls) {

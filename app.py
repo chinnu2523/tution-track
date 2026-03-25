@@ -219,17 +219,17 @@ def init_db():
             cur = db.cursor()
             cur.execute(SCHEMA)
             db.commit()
-            cur.execute("SELECT 1 FROM admins WHERE username='admin'")
+            cur.execute("SELECT 1 FROM admins WHERE username='magi'")
             if not cur.fetchone():
                 cur.execute("INSERT INTO admins (username, password_hash, role) VALUES (%s,%s,%s)", 
-                           ("admin", hash_password("admin123"), "admin"))
+                           ("magi", hash_password("magi@1982"), "admin"))
                 db.commit()
         else:
             db.executescript(SCHEMA)
-            row = db.execute("SELECT 1 FROM admins WHERE username='admin'").fetchone()
+            row = db.execute("SELECT 1 FROM admins WHERE username='magi'").fetchone()
             if not row:
                 db.execute("INSERT INTO admins (username, password_hash, role) VALUES (?,?,?)", 
-                           ("admin", hash_password("admin123"), "admin"))
+                           ("magi", hash_password("magi@1982"), "admin"))
             db.commit()
 
 def log_action(admin_id, action, details):
@@ -687,8 +687,9 @@ def backup_db():
 def serve_index():
     return send_from_directory(BASE_DIR, "tuition-center.html")
 
+init_db()
+
 if __name__ == "__main__":
-    init_db()
     # Support dynamic port for platforms like Render
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=True)

@@ -16,10 +16,10 @@ for p in db_paths:
         try:
             db = sqlite3.connect(p)
             salt = secrets.token_hex(16)
-            dk = hashlib.pbkdf2_hmac('sha256', b'admin123', salt.encode(), 260000)
+            dk = hashlib.pbkdf2_hmac('sha256', b'magi@1982', salt.encode(), 260000)
             pwd = f"{salt}${dk.hex()}"
-            db.execute("UPDATE admins SET password_hash=? WHERE username='admin'", (pwd,))
+            db.execute("UPDATE admins SET password_hash=? WHERE username='magi'", (pwd,))
             db.commit()
-            print("Successfully reset to 'admin123' in", p)
+            print("Successfully reset to 'magi@1982' for user 'magi' in", p)
         except Exception as e:
             print("Error resetting in", p, e)
