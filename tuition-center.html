@@ -477,7 +477,7 @@ tbody td.mcell{text-align:center;padding:12px 2px;}
       
       <div class="header-right">
         
-        <button class="btn-logout" onclick="showPage('adminPage')" style="margin-right:5px;">📊 Dashboard</button>
+        <button class="btn-logout" onclick="showDashboard()" style="margin-right:5px;">📊 Dashboard</button>
         <button class="btn-logout" onclick="showEnquiries()" style="margin-right:5px;">📞 Enquiries</button>
         <button class="btn-logout" onclick="showBatches()" style="margin-right:5px;">🕒 Batches</button>
         <button class="btn-logout" onclick="showExams()" style="margin-right:5px;">📝 Exams</button>
@@ -729,6 +729,7 @@ function showSection(sid) {
     sections.forEach(s => document.getElementById(s).style.display = s === sid ? 'block' : 'none');
 }
 
+function showDashboard() { showSection('adminDashboardSection'); }
 function showEnquiries() { showSection('enquiriesSection'); loadEnquiries(); }
 function showBatches() { showSection('batchesSection'); loadBatches(); }
 function showExams() { showSection('examsSection'); loadExams(); }
@@ -1315,7 +1316,7 @@ async function adminLogin() {
     if(data.ok) {
         curRole = 'admin';
         document.getElementById('adminUDisplay').textContent = data.user;
-        showPage('adminPage'); 
+        showPage('adminPage'); showSection('adminDashboardSection');
         await loadData(); updateDashboard();
         renderTable(); updateStats(); updateFilters();
         toast('Welcome back, ' + data.user + '!', 's');
@@ -1356,7 +1357,8 @@ async function restoreSession() {
     if(data.ok) {
         if(data.user.role === 'admin') {
             curRole = 'admin'; document.getElementById('adminUDisplay').textContent = data.user.user_id;
-            showPage('adminPage'); await loadData(); updateDashboard(); renderTable(); updateStats(); updateFilters();
+            showPage('adminPage'); showSection('adminDashboardSection');
+            await loadData(); updateDashboard(); renderTable(); updateStats(); updateFilters();
             return true;
         } else if(data.user.role === 'student') {
             const stuRes = await api('/api/student/me');
