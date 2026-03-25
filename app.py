@@ -161,6 +161,16 @@ CREATE TABLE IF NOT EXISTS payments (
     receipt_id  TEXT,
     FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS expenses (
+    id          SERIAL PRIMARY KEY,
+    title       TEXT     NOT NULL,
+    amount      INTEGER  NOT NULL,
+    category    TEXT,
+    date        TEXT     NOT NULL,
+    mode        TEXT     NOT NULL,
+    remarks     TEXT
+);
 """
 # Note: In SQLite, SERIAL and SERIAL PRIMARY KEY are not keywords, we need a slight adjustment.
 if not DATABASE_URL:
@@ -287,6 +297,30 @@ def require_auth(fn):
 
 # API ROUTES
 
+@app.route("/api/admin/change_pwd", methods=["POST"])
+@require_admin
+def change_pwd():
+    data = request.get_json(silent=True) or {}
+    cur = data.get("current")
+    new_p = data.get("new")
+    db = get_db()
+    row = db_exec("SELECT password_hash FROM admins WHERE username=?", (g.admin,)).fetchone()
+    if row and verify_password(cur, row["password_hash"]):
+        db_exec("UPDATE admins SET password_hash=? WHERE username=?", (hash_password(new_p), g.admin))
+        db_commit()
+        log_action(g.admin, "PWD_CHANGE", "Password changed")
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "error": "Invalid current password"}), 400
+# Helper for student data alignment
+def format_student(row):
+    d = dict(row)
+    if "class_name" in d: d["class"] = d.pop("class_name")
+    if "monthly_fee" in d: d["monthlyFee"] = d.pop("monthly_fee")
+    if "joining_fee" in d: d["joiningFee"] = d.pop("joining_fee")
+    if "months" in d: d["months"] = json.loads(d["months"]) if d["months"] else {}
+    if "assigned_tracks" in d: d["assigned_tracks"] = json.loads(d["assigned_tracks"]) if d["assigned_tracks"] else []
+    return d
+
 @app.route("/api/login/admin", methods=["POST"])
 def login_admin():
     data = request.get_json(silent=True) or {}
@@ -309,16 +343,32 @@ def login_student():
     phone = re.sub(r"\D", "", data.get("phone", ""))
     
     db = get_db()
-    rows = db_exec("SELECT id, name, phone FROM students").fetchall()
+    rows = db_exec("SELECT * FROM students").fetchall()
     
     for row in rows:
         if name in row["name"].lower() and phone == re.sub(r"\D", "", row["phone"]):
             token = create_session("student", row["id"])
-            resp = jsonify({"ok": True, "token": token, "student": dict(row), "role": "student"})
+            s_data = format_student(row)
+            resp = jsonify({"ok": True, "token": token, "student": s_data, "role": "student"})
             resp.set_cookie("tt_session", token, httponly=True, samesite="Lax", max_age=SESSION_DAYS*86400, path="/")
             return resp
             
     return jsonify({"ok": False, "error": "Student not found."}), 401
+
+@app.route("/api/student/me", methods=["GET"])
+@require_auth
+def get_student_me():
+    if g.user["role"] != "student": return jsonify({"ok": False}), 403
+    db = get_db()
+    row = db_exec("SELECT * FROM students WHERE id=?", (g.user["user_id"],)).fetchone()
+    if not row: return jsonify({"ok": False}), 404
+    s = format_student(row)
+    
+    # Total Paid
+    total_paid = db_exec("SELECT SUM(amount) FROM payments WHERE student_id=?", (g.user["user_id"],)).fetchone()[0] or 0
+    s["totalPaid"] = total_paid
+    
+    return jsonify({"ok": True, "student": s})
 
 @app.route("/api/auth/me", methods=["GET"])
 def auth_me():
@@ -364,13 +414,7 @@ def update_fee_structure():
 @require_auth
 def get_students():
     rows = db_exec("SELECT * FROM students").fetchall()
-    studentsList = []
-    for r in rows:
-        s = dict(r)
-        s["class"] = s.pop("class_name")
-        s["months"] = json.loads(s["months"])
-        studentsList.append(s)
-    return jsonify({"ok": True, "students": studentsList})
+    return jsonify({"ok": True, "students": [format_student(r) for r in rows]})
 
 @app.route("/api/students", methods=["POST"])
 @require_auth
@@ -389,6 +433,14 @@ def create_student():
          datetime.now(timezone.utc).isoformat(), datetime.now(timezone.utc).isoformat())
     )
     db_commit()
+    
+    # If joining fee is paid, record it in payments table
+    if data.get("joining_fee_status") == 'paid' and data.get("joiningFee", 0) > 0:
+        receipt_id = "RCT-J-" + secrets.token_hex(4).upper()
+        db_exec("INSERT INTO payments (student_id, month, amount, mode, remarks, paid_at, receipt_id) VALUES (?,?,?,?,?,?,?)",
+               (sid, "Joining Fee", data.get("joiningFee"), data.get("joining_fee_mode", "Cash"), "Initial Joining Fee", datetime.now(timezone.utc).isoformat(), receipt_id))
+        db_commit()
+        
     log_action(g.user["user_id"], "STUDENT_ADDED", f"Added student: {data.get('name')} ({sid})")
     return jsonify({"ok": True, "id": sid})
 
@@ -451,10 +503,7 @@ def get_student_details(sid):
     st = db_exec("SELECT * FROM students WHERE id=?", (sid,)).fetchone()
     if not st: return jsonify({"ok": False, "error": "Not found"}), 404
     
-    s = dict(st)
-    s["class"] = s.pop("class_name")
-    s["months"] = json.loads(s["months"])
-    s["assigned_tracks"] = json.loads(s["assigned_tracks"])
+    s = format_student(st)
     
     att = db_exec("SELECT date, status FROM attendance WHERE student_id=? ORDER BY date DESC LIMIT 30", (sid,)).fetchall()
     pay = db_exec("SELECT * FROM payments WHERE student_id=? ORDER BY paid_at DESC", (sid,)).fetchall()
@@ -640,10 +689,15 @@ def dashboard_stats():
             
     recent_payments = db_exec("SELECT p.*, s.name FROM payments p JOIN students s ON p.student_id = s.id ORDER BY p.paid_at DESC LIMIT 5").fetchall()
     
+    # Expense stats
+    this_month_expenses = db_exec("SELECT SUM(amount) FROM expenses WHERE date >= ?", (this_month_start[:10],)).fetchone()[0] or 0
+    
     return jsonify({
         "ok": True,
         "total_students": total_students,
         "monthly_collection": monthly_collection,
+        "monthly_expenses": this_month_expenses,
+        "net_profit": monthly_collection - this_month_expenses,
         "pending_fee_students": pending_fee_students,
         "overdue_list": overdue_list[:10],
         "recent_payments": [dict(rp) for rp in recent_payments]
@@ -667,13 +721,67 @@ def serve_upload(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 # Attendance
-@app.route("/api/students/<sid>/attendance", methods=["POST"])
+@app.route("/api/attendance", methods=["GET"])
 @require_auth
-def mark_attendance(sid):
+def get_attendance():
+    date = request.args.get("date")
+    if not date: return jsonify({"ok": False, "error": "Date required"}), 400
+    db = get_db()
+    rows = db_exec("SELECT * FROM attendance WHERE date=?", (date,)).fetchall()
+    return jsonify({"ok": True, "attendance": [dict(r) for r in rows]})
+
+@app.route("/api/attendance", methods=["POST"])
+@require_auth
+def mark_attendance():
+    data = request.get_json()
+    sid = data.get("student_id")
+    date = data.get("date")
+    status = data.get("status")
+    db = get_db()
+    db_exec("DELETE FROM attendance WHERE student_id=? AND date=?", (sid, date))
+    db_exec("INSERT INTO attendance (student_id, date, status) VALUES (?,?,?)", (sid, date, status))
+    db_commit()
+    return jsonify({"ok": True})
+
+@app.route("/api/attendance/bulk", methods=["POST"])
+@require_auth
+def bulk_attendance():
+    data = request.get_json()
+    date = data.get("date")
+    records = data.get("records", []) # list of {student_id, status}
+    db = get_db()
+    for r in records:
+        db_exec("DELETE FROM attendance WHERE student_id=? AND date=?", (r["student_id"], date))
+        db_exec("INSERT INTO attendance (student_id, date, status) VALUES (?,?,?)", (r["student_id"], date, r["status"]))
+    db_commit()
+    return jsonify({"ok": True})
+
+# Expenses
+@app.route("/api/expenses", methods=["GET"])
+@require_admin
+def get_expenses():
+    db = get_db()
+    rows = db_exec("SELECT * FROM expenses ORDER BY date DESC").fetchall()
+    return jsonify({"ok": True, "expenses": [dict(r) for r in rows]})
+
+@app.route("/api/expenses", methods=["POST"])
+@require_admin
+def create_expense():
     data = request.get_json()
     db = get_db()
-    db_exec("INSERT INTO attendance (student_id, date, status) VALUES (?,?,?)", (sid, data["date"], data["status"]))
+    db_exec("INSERT INTO expenses (title, amount, category, date, mode, remarks) VALUES (?,?,?,?,?,?)",
+               (data["title"], data["amount"], data.get("category"), data["date"], data.get("mode", "Cash"), data.get("remarks", "")))
     db_commit()
+    log_action(g.admin, "EXPENSE_ADDED", f"Added expense: {data['title']} (Rs.{data['amount']})")
+    return jsonify({"ok": True})
+
+@app.route("/api/expenses/<eid>", methods=["DELETE"])
+@require_admin
+def delete_expense(eid):
+    db = get_db()
+    db_exec("DELETE FROM expenses WHERE id=?", (eid,))
+    db_commit()
+    log_action(g.admin, "EXPENSE_DELETED", f"Deleted expense ID: {eid}")
     return jsonify({"ok": True})
 
 # Backup

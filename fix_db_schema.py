@@ -1,24 +1,50 @@
 import sqlite3
 import os
 
-db_paths = [
-    '/Users/madarauchiha/Downloads/Project VMS_EduTech/vms_edutech.db',
-    '/Users/madarauchiha/Project VMS_EduTech/vms_edutech.db'
-]
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "tuition.db")
 
-for p in db_paths:
-    if os.path.exists(p):
-        print("Fixing schema in DB:", p)
-        try:
-            db = sqlite3.connect(p)
-            db.execute("DROP TABLE IF EXISTS sessions")
-            db.execute('''CREATE TABLE IF NOT EXISTS sessions (
-                token       TEXT     PRIMARY KEY,
-                role        TEXT     NOT NULL,
-                user_id     TEXT     NOT NULL,
-                expires_at  TEXT     NOT NULL
-            )''')
-            db.commit()
-            print("Successfully fixed sessions table in", p)
-        except Exception as e:
-            print("Error fixing in", p, e)
+def fix_schema():
+    if not os.path.exists(DB_PATH):
+        print("Database not found. app.py will create it on first run.")
+        return
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    try:
+        # Add expenses table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS expenses (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                title       TEXT     NOT NULL,
+                amount      INTEGER  NOT NULL,
+                category    TEXT,
+                date        TEXT     NOT NULL,
+                mode        TEXT     NOT NULL,
+                remarks     TEXT
+            )
+        ''')
+        print("Ensured 'expenses' table exists.")
+
+        # Check if 'attendance' table exists (it should, but just in case)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS attendance (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id  TEXT     NOT NULL,
+                date        TEXT     NOT NULL,
+                status      TEXT     NOT NULL,
+                FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE CASCADE
+            )
+        ''')
+        print("Ensured 'attendance' table exists.")
+
+        conn.commit()
+        print("Migration completed successfully!")
+    except Exception as e:
+        print(f"Error during migration: {e}")
+    finally:
+        conn.close()
+
+if __name__ == "__main__":
+    fix_schema()
