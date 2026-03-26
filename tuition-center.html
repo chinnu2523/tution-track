@@ -922,15 +922,19 @@ function updateFilters() {
 
 async function toggleMonth(id, month) {
     const s = students.find(x => x.id === id); if(!s) return;
-    const old = s.months[month];
-    s.months[month] = !s.months[month];
-    const {data} = await api('/api/students/' + id, 'PUT', s);
-    if(data.ok) {
-        renderTable(); refreshDashboard();
-        toast(`${s.name} — ${month}: ${s.months[month]?'✓ Paid':'✗ Unpaid'}`, s.months[month]?'s':'i');
+    if(!s.months[month]) {
+        // Opening payment modal
+        currPaySid = id; currPayMonth = month;
+        document.getElementById('payModalTitle').textContent = `Pay: ${s.name} (${month})`;
+        document.getElementById('payAmount').value = s.monthlyFee || 0;
+        document.getElementById('payMonth').value = month;
+        openOv('payModal');
     } else {
-        s.months[month] = old;
-        toast('Update failed', 'e');
+        // Marking as Unpaid (reverting)
+        if(!confirm('Mark as Unpaid? (This won\'t delete the payment record if it exists)')) return;
+        s.months[month] = false;
+        const {data} = await api('/api/students/' + id, 'PUT', s);
+        if(data.ok) { renderTable(); refreshDashboard(); toast('Status updated', 'i'); }
     }
 }
 
@@ -1158,6 +1162,7 @@ async function saveExpense() {
         toast('Expense recorded', 's');
         closeOv('addExpenseModal');
         loadExpenses();
+        refreshDashboard();
     }
 }
 
@@ -1167,6 +1172,7 @@ async function deleteExpense(eid) {
     if(data.ok) {
         toast('Expense deleted', 's');
         loadExpenses();
+        refreshDashboard();
     }
 }
 
@@ -1281,9 +1287,30 @@ async function submitMarks() {
     if(data.ok) { toast('Marks saved!', 's'); closeOv('marksModal'); }
 }
 
-function confirmPayment() {
-    toast('Payment processed', 's');
-    closeOv('payModal');
+let currPaySid = null;
+let currPayMonth = null;
+async function confirmPayment() {
+    if(!currPaySid || !currPayMonth) return;
+    const amount = Number(document.getElementById('payAmount').value);
+    const mode = document.getElementById('payMode').value;
+    const remarks = document.getElementById('payRemarks').value;
+    
+    const {data} = await api(`/api/students/${currPaySid}/pay`, 'POST', {
+        month: currPayMonth,
+        amount: amount,
+        mode: mode,
+        remarks: remarks
+    });
+    
+    if(data && data.ok) {
+        toast('Payment processed', 's');
+        closeOv('payModal');
+        await loadData();
+        renderTable();
+        refreshDashboard();
+    } else {
+        toast(data?.error || 'Payment failed', 'e');
+    }
 }
 </script>
 
