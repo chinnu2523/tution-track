@@ -188,16 +188,32 @@ def get_db():
 
 def db_exec(query, params=()):
     db = get_db()
-    # Replace ? with %s for Postgres
     if DATABASE_URL:
         query = query.replace("?", "%s")
-        # Handle AUTOINCREMENT/SERIAL difference in SCHEMA if needed, 
-        # but for normal DML/DQL queries, this replacement is sufficient.
         cur = db.cursor()
         cur.execute(query, params)
         return cur
     else:
         return db.execute(query, params)
+
+def db_upsert(table, pk_col, data):
+    """Helper for INSERT OR REPLACE (SQLite) vs ON CONFLICT (Postgres)"""
+    keys = list(data.keys())
+    values = list(data.values())
+    
+    if DATABASE_URL:
+        # Postgres ON CONFLICT
+        cols = ", ".join(keys)
+        placeholders = ", ".join(["%s"] * len(keys))
+        updates = ", ".join([f"{k} = EXCLUDED.{k}" for k in keys if k != pk_col])
+        query = f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) ON CONFLICT ({pk_col}) DO UPDATE SET {updates}"
+        db_exec(query, tuple(values))
+    else:
+        # SQLite INSERT OR REPLACE
+        cols = ", ".join(keys)
+        placeholders = ", ".join(["?"] * len(keys))
+        query = f"INSERT OR REPLACE INTO {table} ({cols}) VALUES ({placeholders})"
+        db_exec(query, tuple(values))
 
 def db_commit():
     if "db" in g:
@@ -271,7 +287,9 @@ def get_current_user():
     token = resolve_token()
     if not token: return None
     db = get_db()
-    row = db_exec("SELECT role, user_id FROM sessions WHERE token=? AND expires_at > datetime('now')", (token,)).fetchone()
+    # Use ISO string comparison for expiry (works in both SQLite and Postgres)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    row = db_exec("SELECT role, user_id FROM sessions WHERE token=? AND expires_at > ?", (token, now_iso)).fetchone()
     if row: return dict(row)
     return None
 
@@ -343,12 +361,20 @@ def login_student():
     phone = re.sub(r"\D", "", data.get("phone", ""))
     
     db = get_db()
-    rows = db_exec("SELECT * FROM students").fetchall()
+    # Optimized SQL query instead of Python loop
+    if DATABASE_URL:
+        # Postgres ilike or LOWER
+        row = db_exec("SELECT * FROM students WHERE LOWER(name) = %s AND REPLACE(phone, ' ', '') = %s", (name, phone)).fetchone()
+    else:
+        # SQLite LOWER and custom sanitization logic is harder in SQL, 
+        # but we can do a basic match and verify in Python for robustness.
+        row = db_exec("SELECT * FROM students WHERE LOWER(name) = ? AND phone LIKE ?", (name, f"%{phone}%")).fetchone()
     
-    for row in rows:
-        if name in row["name"].lower() and phone == re.sub(r"\D", "", row["phone"]):
+    if row:
+        s_data = format_student(row)
+        # Final sanity check for phone (handles varying formats in DB)
+        if re.sub(r"\D", "", s_data["phone"]) == phone:
             token = create_session("student", row["id"])
-            s_data = format_student(row)
             resp = jsonify({"ok": True, "token": token, "student": s_data, "role": "student"})
             resp.set_cookie("tt_session", token, httponly=True, samesite="Lax", max_age=SESSION_DAYS*86400, path="/")
             return resp
@@ -403,8 +429,7 @@ def update_fee_structure():
     data = request.get_json(silent=True) or {}
     class_name = data.get("class_name")
     fee = data.get("monthly_fee")
-    db = get_db()
-    db_exec("INSERT OR REPLACE INTO fee_structure (class_name, monthly_fee) VALUES (?,?)", (class_name, fee))
+    db_upsert("fee_structure", "class_name", {"class_name": class_name, "monthly_fee": fee})
     db_commit()
     log_action(g.admin, "FEE_STRUCTURE_UPDATE", f"Set {class_name} fee to {fee}")
     return jsonify({"ok": True})
@@ -539,9 +564,7 @@ def get_tracks():
 def create_track():
     data = request.get_json()
     tid = data.get("id") or "tr_" + secrets.token_hex(4)
-    db = get_db()
-    db_exec("INSERT OR REPLACE INTO tracks (id, title, level, skills) VALUES (?,?,?,?)",
-               (tid, data["title"], data["level"], json.dumps(data["skills"])))
+    db_upsert("tracks", "id", {"id": tid, "title": data["title"], "level": data["level"], "skills": json.dumps(data["skills"])})
     db_commit()
     return jsonify({"ok": True, "id": tid})
 
@@ -578,9 +601,11 @@ def get_batches():
 def create_batch():
     data = request.get_json()
     bid = data.get("id") or "bt_" + secrets.token_hex(4)
-    db = get_db()
-    db_exec("INSERT OR REPLACE INTO batches (id, name, time, days, subject, teacher, room) VALUES (?,?,?,?,?,?,?)",
-               (bid, data["name"], data["time"], data["days"], data["subject"], data["teacher"], data["room"]))
+    db_upsert("batches", "id", {
+        "id": bid, "name": data["name"], "time": data["time"], 
+        "days": data["days"], "subject": data["subject"], 
+        "teacher": data["teacher"], "room": data.get("room")
+    })
     db_commit()
     return jsonify({"ok": True, "id": bid})
 
@@ -632,10 +657,10 @@ def get_exam_marks(eid):
 def update_marks(eid):
     data = request.get_json()
     marks_list = data.get("marks", []) # list of {student_id, marks_obtained}
-    db = get_db()
     for m in marks_list:
-        db_exec("INSERT OR REPLACE INTO marks (exam_id, student_id, marks_obtained) VALUES (?,?,?)",
-                   (eid, m["student_id"], m["marks_obtained"]))
+        db_upsert("marks", "exam_id, student_id", {
+            "exam_id": eid, "student_id": m["student_id"], "marks_obtained": m["marks_obtained"]
+        })
     db_commit()
     return jsonify({"ok": True})
 
