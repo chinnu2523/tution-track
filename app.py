@@ -61,7 +61,8 @@ CREATE TABLE IF NOT EXISTS students (
     months         TEXT     NOT NULL DEFAULT '{}',
     assigned_tracks TEXT    NOT NULL DEFAULT '[]',
     created_at     TEXT     NOT NULL,
-    updated_at     TEXT     NOT NULL
+    updated_at     TEXT     NOT NULL,
+    course         TEXT
 );
 
 CREATE TABLE IF NOT EXISTS tracks (
@@ -337,6 +338,7 @@ def format_student(row):
     if "joining_fee" in d: d["joiningFee"] = d.pop("joining_fee")
     if "months" in d: d["months"] = json.loads(d["months"]) if d["months"] else {}
     if "assigned_tracks" in d: d["assigned_tracks"] = json.loads(d["assigned_tracks"]) if d["assigned_tracks"] else []
+    if "course" not in d: d["course"] = "" # Ensure course is present, default to empty string
     return d
 
 @app.route("/api/login/admin", methods=["POST"])
@@ -449,13 +451,13 @@ def create_student():
     
     db = get_db()
     db_exec('''INSERT INTO students 
-        (id, name, school, class_name, phone, is_whatsapp, photo_path, joining_fee, joining_fee_status, joining_fee_date, joining_fee_mode, monthly_fee, months, assigned_tracks, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        (id, name, school, class_name, phone, is_whatsapp, photo_path, joining_fee, joining_fee_status, joining_fee_date, joining_fee_mode, monthly_fee, months, assigned_tracks, created_at, updated_at, course)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
         (sid, data.get("name"), data.get("school", ""), data.get("class", ""), data.get("phone", ""),
          data.get("is_whatsapp", 0), data.get("photo_path"), data.get("joiningFee", 0), 
          data.get("joining_fee_status", "unpaid"), data.get("joining_fee_date"), data.get("joining_fee_mode"),
          data.get("monthlyFee", 0), json.dumps(data.get("months", {})), json.dumps(data.get("assigned_tracks", [])),
-         datetime.now(timezone.utc).isoformat(), datetime.now(timezone.utc).isoformat())
+         datetime.now(timezone.utc).isoformat(), datetime.now(timezone.utc).isoformat(), data.get("course"))
     )
     db_commit()
     
@@ -475,14 +477,14 @@ def update_student(sid):
     data = request.get_json(silent=True) or {}
     db = get_db()
     db_exec('''UPDATE students 
-        SET name=?, school=?, class_name=?, phone=?, is_whatsapp=?, photo_path=?, joining_fee=?, joining_fee_status=?, joining_fee_date=?, joining_fee_mode=?, monthly_fee=?, months=?, assigned_tracks=?, updated_at=?
+        SET name=?, school=?, class_name=?, phone=?, is_whatsapp=?, photo_path=?, joining_fee=?, joining_fee_status=?, joining_fee_date=?, joining_fee_mode=?, monthly_fee=?, months=?, assigned_tracks=?, updated_at=?, course=?
         WHERE id=?''',
         (data.get("name"), data.get("school",""), data.get("class",""), data.get("phone",""), 
          data.get("is_whatsapp", 0), data.get("photo_path"), 
          data.get("joiningFee", 0), data.get("joining_fee_status", "unpaid"), 
          data.get("joining_fee_date"), data.get("joining_fee_mode"),
          data.get("monthlyFee", 0), json.dumps(data.get("months", {})), json.dumps(data.get("assigned_tracks", [])),
-         datetime.now(timezone.utc).isoformat(), sid)
+         datetime.now(timezone.utc).isoformat(), data.get("course"), sid)
     )
     db_commit()
     log_action(g.user["user_id"], "STUDENT_UPDATED", f"Updated student profile: {data.get('name')} ({sid})")

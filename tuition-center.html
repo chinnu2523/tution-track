@@ -22,13 +22,13 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 .section.active{display:block;opacity:1;transform:translateX(0);}
 
 .stagger-in > * { opacity: 0; transform: translateY(10px); transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
-.stagger-in.active > * { opacity: 1; transform: translateY(0); }
-.stagger-in.active > *:nth-child(1) { transition-delay: 0.05s; }
-.stagger-in.active > *:nth-child(2) { transition-delay: 0.1s; }
-.stagger-in.active > *:nth-child(3) { transition-delay: 0.15s; }
-.stagger-in.active > *:nth-child(4) { transition-delay: 0.2s; }
-.stagger-in.active > *:nth-child(5) { transition-delay: 0.25s; }
-.stagger-in.active > *:nth-child(6) { transition-delay: 0.3s; }
+.active .stagger-in > * { opacity: 1; transform: translateY(0); }
+.active .stagger-in > *:nth-child(1) { transition-delay: 0.05s; }
+.active .stagger-in > *:nth-child(2) { transition-delay: 0.1s; }
+.active .stagger-in > *:nth-child(3) { transition-delay: 0.15s; }
+.active .stagger-in > *:nth-child(4) { transition-delay: 0.2s; }
+.active .stagger-in > *:nth-child(5) { transition-delay: 0.25s; }
+.active .stagger-in > *:nth-child(6) { transition-delay: 0.3s; }
 
 
 .light-mode {
@@ -558,7 +558,16 @@ tbody td.mcell{text-align:center;padding:12px 2px;}
 
       <div class="table-wrap">
         <div class="table-scroll">
-          <table id="stuTable"><thead><tr id="theadRow"></tr></thead><tbody id="tbody"></tbody></table>
+          <table id="stuTable">
+            <thead>
+              <tr id="theadRow">
+                <th>#</th><th>Student</th><th>Course</th><th>School</th><th>Class</th><th>Phone</th><th>Joining</th><th>Monthly</th><th>Progress</th>
+                <th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th><th>May</th><th>Jun</th><th>Jul</th><th>Aug</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dec</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
         </div>
         <div id="emptyState" class="empty-state" style="display:none">
           <div class="ei">🎓</div><div class="et">No students yet</div><div class="es">Click "Add Student" to get started</div>
@@ -605,7 +614,7 @@ tbody td.mcell{text-align:center;padding:12px 2px;}
       <div class="table-wrap">
         <div class="table-scroll">
           <table>
-            <thead><tr><th>Student</th><th>Grade</th><th>Status</th><th>Action</th></tr></thead>
+              <thead><tr><th>Student</th><th>Course</th><th>Grade</th><th>Fees Detail</th><th>Recent Payments</th><th>Action</th></tr></thead>
             <tbody id="attTableBody" class="stagger-in"></tbody>
           </table>
         </div>
@@ -701,6 +710,7 @@ tbody td.mcell{text-align:center;padding:12px 2px;}
         <div class="fg"><label>Parent's Phone *</label><input type="tel" id="fPhone" placeholder="10-digit number" maxlength="15"><span class="ferr" id="ePhone"></span></div>
         <div class="fg"><label>Joining Fee (₹)</label><input type="number" id="fJoining" placeholder="e.g. 500" min="0"><span class="ferr" id="eJoining"></span></div>
         <div class="fg"><label>Monthly Fee (₹) *</label><input type="number" id="fMonthly" placeholder="e.g. 1500" min="0"><span class="ferr" id="eMonthly"></span></div>
+        <div class="fg full"><label>Course / Track (from VMS EduTech)</label><input type="text" id="fCourse" placeholder="e.g. mth, ai, ds" maxlength="50"></div>
       </div>
       <div class="msec">
         <div class="msec-title">Monthly Payment Status — click to toggle paid/unpaid</div>
@@ -738,7 +748,7 @@ const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov',
 const MF=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const CM=new Date().getMonth(), CY=new Date().getFullYear();
 
-let students=[], editId=null, delId=null, fmM={}, curRole=null, loggedStu=null;
+let students=[], editId=null, delId=null, fmM={}, curRole=null, loggedStu=null, idleTimer=0;
 
 // ══════════════════════════════════════════════════════
 //  UTILS
@@ -874,6 +884,7 @@ function renderTable() {
             <tr>
                 <td style="color:var(--text3);font-family:'DM Mono',monospace;font-size:11px">${i+1}</td>
                 <td><div class="sname">${esc(x.name)}</div><div class="smeta">${fmtD(x.created_at)}</div></td>
+                <td><span class="cbadge" style="background:rgba(99,102,241,0.1); color:var(--blue)">${esc(x.course || 'General')}</span></td>
                 <td style="color:var(--text2);font-size:13px">${esc(x.school)}</td>
                 <td><span class="cbadge">${esc(x.class)}</span></td>
                 <td><a href="tel:${esc(x.phone)}" style="color:var(--text2);text-decoration:none;font-size:13px">${esc(x.phone)}</a></td>
@@ -960,6 +971,7 @@ function renderStudentPortal(s) {
                     <h2>${esc(s.name)}</h2><div style="color:var(--text2);font-size:14px">${esc(s.school)}</div>
                     <div class="stu-tags">
                         <span class="stag">${esc(s.class)}</span><span class="stag">📞 ${esc(s.phone)}</span>
+                        <span class="stag" style="background:rgba(99,102,241,0.1); color:var(--blue)">Course: ${esc(s.course || 'General')}</span>
                         <span class="stag ${curPaid?'g':'r'}">${curPaid?'✓ Paid':'⚠ Due'}</span>
                         <span class="stag">Joined ${fmtD(s.created_at)}</span>
                     </div>
@@ -1045,6 +1057,7 @@ async function openEditModal(id) {
     document.getElementById('fName').value = s.name; document.getElementById('fSchool').value = s.school;
     document.getElementById('fClass').value = s.class; document.getElementById('fPhone').value = s.phone;
     document.getElementById('fJoining').value = s.joiningFee || ''; document.getElementById('fMonthly').value = s.monthlyFee || '';
+    document.getElementById('fCourse').value = s.course || '';
     openOv('stuModal');
 }
 
@@ -1056,6 +1069,7 @@ async function saveStudent() {
         phone: document.getElementById('fPhone').value,
         joiningFee: Number(document.getElementById('fJoining').value),
         monthlyFee: Number(document.getElementById('fMonthly').value),
+        course: document.getElementById('fCourse').value,
         months: fmM
     };
     const res = await api('/api/students' + (editId ? '/' + editId : ''), editId ? 'PUT' : 'POST', p);
@@ -1090,13 +1104,21 @@ async function saveExam() {
 //  ATTENDANCE & MARKS
 // ══════════════════════════════════════════════════════
 async function loadAttendance() {
-    const d = document.getElementById('attDate').value; if(!d) return;
+    let d = document.getElementById('attDate').value; 
+    if(!d) {
+        d = new Date().toISOString().split('T')[0];
+        document.getElementById('attDate').value = d;
+    }
     const [sRes, aRes] = await Promise.all([api('/api/students'), api('/api/attendance?date='+d)]);
     if(sRes.data.ok && aRes.data.ok) {
         const attMap = {}; aRes.data.attendance.forEach(a => attMap[a.student_id] = a.status);
         document.getElementById('attTableBody').innerHTML = sRes.data.students.map(s => `
             <tr>
-                <td>${esc(s.name)}</td><td>${esc(s.class)}</td>
+                <td><strong>${esc(s.name)}</strong></td>
+                <td><span class="cbadge" style="background:rgba(99,102,241,0.1); color:var(--blue)">${esc(s.course || 'General')}</span></td>
+                <td>${esc(s.class)}</td>
+                <td>${(s.totalPaid||0).toLocaleString()} / ${((s.monthlyFee||0)*12).toLocaleString()}</td>
+                <td>${s.recent_payment || '—'}</td>
                 <td><div class="att-box" style="margin:0;"><div class="att-btn p ${attMap[s.id]==='P'?'act':''}" onclick="setAtt('${s.id}','P')">P</div><div class="att-btn a ${attMap[s.id]==='A'?'act':''}" onclick="setAtt('${s.id}','A')">A</div></div></td>
             </tr>
         `).join('');
@@ -1192,6 +1214,20 @@ window.onload = async () => {
   } finally {
     const cn = localStorage.getItem('tt_center_name');
     if(cn) document.querySelectorAll('.logo-name').forEach(el => el.innerHTML = `${esc(cn)}<span>Track</span>`);
+
+    const thr = document.getElementById('theadRow');
+    if(thr) thr.innerHTML = `<th>#</th><th>Student</th><th>Course</th><th>School</th><th>Class</th><th>Phone</th><th>Joining</th><th>Monthly</th><th>Progress</th>` + MONTHS.map(m => `<th>${m}</th>`).join('') + `<th>Action</th>`;
+
+    setInterval(() => {
+        if(curRole) {
+            idleTimer++;
+            if(idleTimer >= 5) { // 5 minutes
+                logout();
+                toast('Logged out due to inactivity', 'i');
+            }
+        }
+    }, 60000);
+    document.onmousemove = document.onkeypress = () => idleTimer = 0;
 
     setTimeout(()=>{
       const ls = document.getElementById('loadScreen');
