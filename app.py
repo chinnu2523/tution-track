@@ -27,7 +27,11 @@ CORS(app)
 
 @app.route("/api/vms-check")
 def vms_check():
-    return jsonify({"ok": True, "version": "1.0.2", "status": "VMS Updates Active"})
+    return jsonify({"ok": True, "version": "1.0.3", "status": "VMS Updates Active"})
+
+@app.route("/vms")
+def vms_landing():
+    return send_from_directory("vms_site", "index.html")
 app.secret_key = secrets.token_hex(32)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
