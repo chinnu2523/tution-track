@@ -259,6 +259,14 @@ def init_db():
             cur = db.cursor()
             cur.execute(SCHEMA)
             db.commit()
+
+            # Migration: Ensure students table has course columns
+            cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='students' AND column_name='course_id'")
+            if not cur.fetchone():
+                cur.execute("ALTER TABLE students ADD COLUMN course TEXT")
+                cur.execute("ALTER TABLE students ADD COLUMN course_id TEXT")
+                db.commit()
+
             cur.execute("SELECT 1 FROM admins WHERE username='magi'")
             if not cur.fetchone():
                 cur.execute("INSERT INTO admins (username, password_hash, role) VALUES (%s,%s,%s)", 
@@ -266,6 +274,13 @@ def init_db():
                 db.commit()
         else:
             db.executescript(SCHEMA)
+            # SQLite Migration
+            try:
+                db.execute("ALTER TABLE students ADD COLUMN course TEXT")
+                db.execute("ALTER TABLE students ADD COLUMN course_id TEXT")
+            except Exception:
+                pass # Already exists
+            
             row = db.execute("SELECT 1 FROM admins WHERE username='magi'").fetchone()
             if not row:
                 db.execute("INSERT INTO admins (username, password_hash, role) VALUES (?,?,?)", 
