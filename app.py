@@ -62,7 +62,20 @@ CREATE TABLE IF NOT EXISTS students (
     assigned_tracks TEXT    NOT NULL DEFAULT '[]',
     created_at     TEXT     NOT NULL,
     updated_at     TEXT     NOT NULL,
-    course         TEXT
+    course         TEXT,
+    course_id      TEXT,
+    FOREIGN KEY(course_id) REFERENCES courses(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS courses (
+    id             TEXT     PRIMARY KEY,
+    title          TEXT     NOT NULL,
+    category       TEXT     NOT NULL, -- 'c10' or 'tec'
+    level          TEXT,
+    description    TEXT,
+    icon           TEXT,
+    color          TEXT,
+    skills         TEXT     NOT NULL DEFAULT '[]' -- JSON array
 );
 
 CREATE TABLE IF NOT EXISTS tracks (
@@ -258,6 +271,41 @@ def init_db():
                 db.execute("INSERT INTO admins (username, password_hash, role) VALUES (?,?,?)", 
                            ("magi", hash_password("magi@1982"), "admin"))
             db.commit()
+        seed_courses()
+
+def seed_courses():
+    """Populate default VMS EduTech tracks if courses table is empty"""
+    courses = [
+        # Class 10
+        {"id": "mth", "title": "Mathematics", "category": "c10", "level": "Class 10", "description": "CBSE / AP State Board Full Curriculum", "icon": "📐", "color": "#f0c040", "skills": ["Real Numbers","Polynomials","Linear Equations","Quadratic Eq.","AP Series","Similar Triangles","Circles","Trigonometry","Heights & Distances","Mensuration","Statistics","Probability"]},
+        {"id": "sc",  "title": "Science", "category": "c10", "level": "Class 10", "description": "Physics + Chemistry + Biology (CBSE)", "icon": "🔬", "color": "#3dd68c", "skills": ["Light & Optics","Electricity","Magnetism","Chemical Reactions","Acids & Bases","Metals","Carbon Compounds","Periodic Table","Life Processes","Reproduction","Heredity","Environment"]},
+        {"id": "en",  "title": "English", "category": "c10", "level": "Class 10", "description": "First Flight + Footprints Without Feet", "icon": "📖", "color": "#ff5fa0", "skills": ["Literature Analysis","Poetry Themes","Footprints Stories","Formal Letters","Articles","Speeches","Grammar","Tenses","Active-Passive","Reported Speech","Comprehension","Editing"]},
+        {"id": "ss",  "title": "Social Studies", "category": "c10", "level": "Class 10", "description": "History + Geography + Civics + Economics", "icon": "🌍", "color": "#ff9f4a", "skills": ["Nationalism","Industrialisation","Resources","Agriculture","Manufacturing","Federalism","Power Sharing","Political Parties","Development","Economic Sectors","Money & Credit","Globalisation"]},
+        {"id": "hi",  "title": "Hindi", "category": "c10", "level": "Class 10", "description": "Kshitij + Kritika + Sparsh + Sanchayan", "icon": "🔤", "color": "#e05cff", "skills": ["Kshitij Gadya","Kshitij Padya","Kritika","Ras","Chand","Shabdalankar","Arthalankar","Samaas","Sandhi","Muhavare","Patra Lekhan","Nibandha"]},
+        {"id": "te",  "title": "Telugu", "category": "c10", "level": "Class 10", "description": "AP & Telangana State Board SSC", "icon": "✍️", "color": "#44d9e8", "skills": ["Padyabhaag","Gadyabhaag","Sandhulu","Samaasalu","Vibhakti","Pratyayalu","Nibandham","Patram","Apatha Pariksha","Paryayapadaalu","Virodharthakaalu","Nirvachanam"]},
+        {"id": "cs",  "title": "Computer Science", "category": "c10", "level": "Class 10", "description": "ICT, MS Office, HTML, Python & Cyber Safety", "icon": "💻", "color": "#7eb8ff", "skills": ["Hardware/Software","Number Systems","MS Word","MS Excel","MS PowerPoint","Internet & Email","HTML","CSS","Python Basics","Conditionals","Loops","Functions"]},
+        {"id": "ar",  "title": "Arts & Drawing", "category": "c10", "level": "Class 10", "description": "Drawing, Painting, Indian Art & Design", "icon": "🎨", "color": "#ffb347", "skills": ["Line Drawing","Perspective","Shading","Poster Design","Lettering","Madhubani Art","Warli Art","Tanjore Painting","Colour Theory","Watercolour","Composition","Portrait Basics"]},
+        # Tech Tracks
+        {"id": "ai",  "title": "AI & Machine Learning", "category": "tec", "level": "Career", "description": "Python to Production ML Models", "icon": "🤖", "color": "#00d4aa", "skills": ["Python","NumPy/Pandas","Scikit-learn","TensorFlow","PyTorch","CNNs","Transformers","LLMs","RAG","Prompt Eng.","MLOps","FastAPI/Docker"]},
+        {"id": "ds",  "title": "Data Science", "category": "tec", "level": "Career", "description": "Raw Data to Business Insights", "icon": "📊", "color": "#ff6b35", "skills": ["Python/R","SQL","Pandas","Tableau","Power BI","Statistics","EDA","A/B Testing","Spark","Airflow","dbt","Snowflake"]},
+        {"id": "cl",  "title": "Cloud Computing", "category": "tec", "level": "Career", "description": "Design, Deploy & Scale Cloud Systems", "icon": "☁️", "color": "#4d9fff", "skills": ["Linux","Docker","AWS","Azure","GCP","Terraform","Kubernetes","CI/CD","IAM & Security","Serverless","Prometheus/Grafana","SRE"]},
+        {"id": "cy",  "title": "Cybersecurity", "category": "tec", "level": "Career", "description": "Defend Systems, Hunt Threats, Hack Ethically", "icon": "🛡️", "color": "#b44dff", "skills": ["Networking","Linux","Cryptography","Nmap","Metasploit","OWASP Top 10","Splunk/SIEM","Forensics","Pentest","SOC Operations","OSCP Prep","Bug Bounty"]}
+    ]
+    db = get_db()
+    exists = db_exec("SELECT COUNT(*) FROM courses").fetchone()[0]
+    if not exists:
+        for c in courses:
+            db_upsert("courses", "id", {
+                "id": c["id"],
+                "title": c["title"],
+                "category": c["category"],
+                "level": c["level"],
+                "description": c["description"],
+                "icon": c["icon"],
+                "color": c["color"],
+                "skills": json.dumps(c["skills"])
+            })
+        db_commit()
 
 def log_action(admin_id, action, details):
     db_exec(
@@ -338,7 +386,8 @@ def format_student(row):
     if "joining_fee" in d: d["joiningFee"] = d.pop("joining_fee")
     if "months" in d: d["months"] = json.loads(d["months"]) if d["months"] else {}
     if "assigned_tracks" in d: d["assigned_tracks"] = json.loads(d["assigned_tracks"]) if d["assigned_tracks"] else []
-    if "course" not in d: d["course"] = "" # Ensure course is present, default to empty string
+    # If course_id exists and course title is missing, we could fetch it, 
+    # but normally we use a JOIN in the route.
     return d
 
 @app.route("/api/login/admin", methods=["POST"])
@@ -376,6 +425,10 @@ def login_student():
         s_data = format_student(row)
         # Final sanity check for phone (handles varying formats in DB)
         if re.sub(r"\D", "", s_data["phone"]) == phone:
+            # Add Total Paid
+            total_paid = db_exec("SELECT SUM(amount) FROM payments WHERE student_id=?", (row["id"],)).fetchone()[0] or 0
+            s_data["totalPaid"] = total_paid
+            
             token = create_session("student", row["id"])
             resp = jsonify({"ok": True, "token": token, "student": s_data, "role": "student"})
             resp.set_cookie("tt_session", token, httponly=True, samesite="Lax", max_age=SESSION_DAYS*86400, path="/")
@@ -434,60 +487,74 @@ def update_fee_structure():
     db_upsert("fee_structure", "class_name", {"class_name": class_name, "monthly_fee": fee})
     db_commit()
     log_action(g.admin, "FEE_STRUCTURE_UPDATE", f"Set {class_name} fee to {fee}")
-    return jsonify({"ok": True})
-
-# Students
 @app.route("/api/students", methods=["GET"])
-@require_auth
+@require_admin
 def get_students():
-    rows = db_exec("SELECT * FROM students").fetchall()
-    return jsonify({"ok": True, "students": [format_student(r) for r in rows]})
+    # Use JOIN to get course title if course_id is set
+    query = """
+        SELECT s.*, c.title as course_title 
+        FROM students s 
+        LEFT JOIN courses c ON s.course_id = c.id
+        ORDER BY s.created_at DESC
+    """
+    rows = db_exec(query).fetchall()
+    res = []
+    for r in rows:
+        d = format_student(r)
+        # Use course_title if available, fallback to legacy 'course' text field
+        if d.get("course_id") and d.get("course_title"):
+            d["course"] = d["course_title"]
+        res.append(d)
+    return jsonify({"ok": True, "students": res})
 
 @app.route("/api/students", methods=["POST"])
-@require_auth
-def create_student():
-    data = request.get_json(silent=True) or {}
-    sid = "st_" + str(int(datetime.now().timestamp() * 1000)) + "_" + secrets.token_hex(2)
-    
-    db = get_db()
-    db_exec('''INSERT INTO students 
-        (id, name, school, class_name, phone, is_whatsapp, photo_path, joining_fee, joining_fee_status, joining_fee_date, joining_fee_mode, monthly_fee, months, assigned_tracks, created_at, updated_at, course)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-        (sid, data.get("name"), data.get("school", ""), data.get("class", ""), data.get("phone", ""),
-         data.get("is_whatsapp", 0), data.get("photo_path"), data.get("joiningFee", 0), 
-         data.get("joining_fee_status", "unpaid"), data.get("joining_fee_date"), data.get("joining_fee_mode"),
+@require_admin
+def add_student():
+    data = request.get_json()
+    id = str(uuid.uuid4())[:8]
+    now = datetime.now(timezone.utc).isoformat()
+    db_exec(
+        "INSERT INTO students (id, name, school, class_name, phone, is_whatsapp, photo_path, joining_fee, joining_fee_status, joining_fee_date, joining_fee_mode, monthly_fee, months, assigned_tracks, created_at, updated_at, course, course_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (id, data["name"], data["school"], data["class"], data["phone"], data.get("is_whatsapp", 0), data.get("photo_path"), 
+         data.get("joiningFee", 0), data.get("joining_fee_status", "unpaid"), data.get("joining_fee_date"), data.get("joining_fee_mode"),
          data.get("monthlyFee", 0), json.dumps(data.get("months", {})), json.dumps(data.get("assigned_tracks", [])),
-         datetime.now(timezone.utc).isoformat(), datetime.now(timezone.utc).isoformat(), data.get("course"))
+         now, now, data.get("course", ""), data.get("course_id"))
     )
-    db_commit()
-    
     # If joining fee is paid, record it in payments table
     if data.get("joining_fee_status") == 'paid' and data.get("joiningFee", 0) > 0:
-        receipt_id = "RCT-J-" + secrets.token_hex(4).upper()
         db_exec("INSERT INTO payments (student_id, month, amount, mode, remarks, paid_at, receipt_id) VALUES (?,?,?,?,?,?,?)",
-               (sid, "Joining Fee", data.get("joiningFee"), data.get("joining_fee_mode", "Cash"), "Initial Joining Fee", datetime.now(timezone.utc).isoformat(), receipt_id))
-        db_commit()
-        
-    log_action(g.user["user_id"], "STUDENT_ADDED", f"Added student: {data.get('name')} ({sid})")
-    return jsonify({"ok": True, "id": sid})
+                (id, "JOINING", data["joiningFee"], data.get("joining_fee_mode", "cash"), "Initial enrollment", now, f"R-{id}-J"))
+    db_commit()
+    log_action(g.admin, "ADD_STUDENT", f"Added {data['name']}")
+    return jsonify({"ok": True, "id": id})
 
 @app.route("/api/students/<sid>", methods=["PUT"])
-@require_auth
+@require_admin
 def update_student(sid):
-    data = request.get_json(silent=True) or {}
+    data = request.get_json()
+    
+    # Handle payment reversion sync
     db = get_db()
-    db_exec('''UPDATE students 
-        SET name=?, school=?, class_name=?, phone=?, is_whatsapp=?, photo_path=?, joining_fee=?, joining_fee_status=?, joining_fee_date=?, joining_fee_mode=?, monthly_fee=?, months=?, assigned_tracks=?, updated_at=?, course=?
-        WHERE id=?''',
-        (data.get("name"), data.get("school",""), data.get("class",""), data.get("phone",""), 
-         data.get("is_whatsapp", 0), data.get("photo_path"), 
-         data.get("joiningFee", 0), data.get("joining_fee_status", "unpaid"), 
-         data.get("joining_fee_date"), data.get("joining_fee_mode"),
+    old_st = db_exec("SELECT months FROM students WHERE id=?", (sid,)).fetchone()
+    if old_st:
+        old_months = json.loads(old_st["months"]) if old_st["months"] else {}
+        new_months = data.get("months", {})
+        for m, status in old_months.items():
+            if status and not new_months.get(m):
+                # Month was paid, now unpaid. Revert in payments table.
+                db_exec("DELETE FROM payments WHERE student_id=? AND month=?", (sid, m))
+
+    db_exec(
+        """UPDATE students 
+        SET name=?, school=?, class_name=?, phone=?, is_whatsapp=?, photo_path=?, joining_fee=?, joining_fee_status=?, joining_fee_date=?, joining_fee_mode=?, monthly_fee=?, months=?, assigned_tracks=?, updated_at=?, course=?, course_id=? 
+        WHERE id=?""",
+        (data["name"], data["school"], data["class"], data["phone"], data.get("is_whatsapp", 0), data.get("photo_path"),
+         data.get("joiningFee", 0), data.get("joining_fee_status", "unpaid"), data.get("joining_fee_date"), data.get("joining_fee_mode"),
          data.get("monthlyFee", 0), json.dumps(data.get("months", {})), json.dumps(data.get("assigned_tracks", [])),
-         datetime.now(timezone.utc).isoformat(), data.get("course"), sid)
+         datetime.now(timezone.utc).isoformat(), data.get("course", ""), data.get("course_id"), sid)
     )
     db_commit()
-    log_action(g.user["user_id"], "STUDENT_UPDATED", f"Updated student profile: {data.get('name')} ({sid})")
+    log_action(g.admin, "UPDATE_STUDENT", f"Updated student {sid}")
     return jsonify({"ok": True})
 
 @app.route("/api/students/<sid>", methods=["DELETE"])
@@ -557,9 +624,46 @@ def get_tracks():
     res = []
     for r in rows:
         d = dict(r)
-        d["skills"] = json.loads(d["skills"])
+        d["skills"] = json.loads(d["skills"]) if d["skills"] else []
         res.append(d)
     return jsonify({"ok": True, "tracks": res})
+
+# Courses (General Model)
+@app.route("/api/courses", methods=["GET"])
+def get_courses():
+    rows = db_exec("SELECT * FROM courses ORDER BY category, title").fetchall()
+    res = []
+    for r in rows:
+        d = dict(r)
+        d["skills"] = json.loads(d["skills"]) if d["skills"] else []
+        res.append(d)
+    return jsonify({"ok": True, "courses": res})
+
+@app.route("/api/courses", methods=["POST"])
+@require_admin
+def add_course():
+    data = request.get_json()
+    db_upsert("courses", "id", {
+        "id": data["id"],
+        "title": data["title"],
+        "category": data["category"],
+        "level": data.get("level", ""),
+        "description": data.get("description", ""),
+        "icon": data.get("icon", "📚"),
+        "color": data.get("color", "#4d9fff"),
+        "skills": json.dumps(data.get("skills", []))
+    })
+    db_commit()
+    log_action(g.admin, "COURSE_ADDED", f"Added course {data['id']}")
+    return jsonify({"ok": True})
+
+@app.route("/api/courses/<cid>", methods=["DELETE"])
+@require_admin
+def delete_course(cid):
+    db_exec("DELETE FROM courses WHERE id=?", (cid,))
+    db_commit()
+    log_action(g.admin, "COURSE_DELETED", f"Deleted course {cid}")
+    return jsonify({"ok": True})
 
 @app.route("/api/lms/tracks", methods=["POST"])
 @require_admin
@@ -821,6 +925,10 @@ def backup_db():
 @app.route("/")
 def serve_index():
     return send_from_directory(BASE_DIR, "tuition-center.html")
+
+@app.route("/<path:filename>")
+def serve_static(filename):
+    return send_from_directory(BASE_DIR, filename)
 
 init_db()
 

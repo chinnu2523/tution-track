@@ -5,7 +5,9 @@ const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov',
 const MF=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const CM=new Date().getMonth(), CY=new Date().getFullYear();
 
-let students=[], editId=null, delId=null, fmM={}, curRole=null, loggedStu=null;
+let students=[], editId=null, delId=null, fmM={}, curRole=null, loggedStu=null, idleTimer=0;
+let courses = [];
+let currPaySid = null, currPayMonth = null, pendingReceipt = null;
 
 // ══════════════════════════════════════════════════════
 //  UTILS
@@ -49,7 +51,7 @@ function selectRole(role) {
 }
 
 function showSection(sid) {
-    const sections = ['adminDashboardSection', 'enquiriesSection', 'batchesSection', 'examsSection', 'settingsSection', 'attendanceSection', 'expenseSection'];
+    const sections = ['adminDashboardSection', 'enquiriesSection', 'batchesSection', 'examsSection', 'settingsSection', 'attendanceSection', 'expenseSection', 'adminCoursesSection'];
     sections.forEach(s => {
         const el = document.getElementById(s);
         if(!el) return;
@@ -64,6 +66,7 @@ function showExams() { showSection('examsSection'); loadExams(); }
 function showSettings() { showSection('settingsSection'); }
 function showAttendance() { showSection('attendanceSection'); loadAttendance(); }
 function showExpenses() { showSection('expenseSection'); loadExpenses(); }
+function showCourses() { showSection('adminCoursesSection'); loadCourseList(); }
 
 function openOv(id) { document.getElementById(id).classList.add('open'); }
 function closeOv(id) { document.getElementById(id).classList.remove('open'); }
@@ -100,6 +103,81 @@ async function loadExams() {
 }
 
 function exportBackup() { window.open('/api/admin/backup', '_blank'); }
+
+async function loadCourses() {
+    const {data} = await api('/api/courses');
+    if (data && data.ok) {
+        courses = data.courses;
+        const sel = document.getElementById('fCourse');
+        if (sel) {
+            const currentVal = sel.value;
+            sel.innerHTML = '<option value="">-- Select Course --</option>' + 
+                courses.map(c => `<option value="${c.id}">${c.icon} ${c.title} (${c.id.toUpperCase()})</option>`).join('');
+            sel.value = currentVal;
+        }
+        renderCourses();
+    }
+}
+
+function renderCourses() {
+    const tbody = document.getElementById('courseTableBody');
+    if(!tbody) return;
+    tbody.innerHTML = courses.map(c => `
+        <tr class="stagger-in">
+            <td style="font-size:24px;">${c.icon}</td>
+            <td style="font-family:monospace; font-weight:bold;">${c.id.toUpperCase()}</td>
+            <td><div style="font-weight:600; color:${c.color}">${esc(c.title)}</div></td>
+            <td><span class="badge ${c.category === 'c10' ? 'badge-info' : 'badge-success'}">${c.category === 'c10' ? 'Class 10' : 'Tech'}</span></td>
+            <td><small style="color:var(--text-muted)">${esc(c.description)}</small></td>
+            <td><button class="btn btn-danger btn-sm" onclick="delCourse('${c.id}')">Del</button></td>
+        </tr>
+    `).join('') || '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text3)">No courses found</td></tr>';
+}
+
+function showCourses() { showSection('adminCoursesSection'); loadCourses(); }
+
+async function loadCourseList() {
+    const {data} = await api('/api/courses');
+    if(!data.ok) return;
+    document.getElementById('courseTableBody').innerHTML = data.courses.map(c => `
+        <tr>
+            <td style="font-size:24px">${c.icon || '📚'}</td>
+            <td><code>${esc(c.id)}</code></td>
+            <td><strong>${esc(c.title)}</strong></td>
+            <td><span class="cbadge" style="background:${c.color}20; color:${c.color}">${esc(c.category.toUpperCase())}</span></td>
+            <td>${esc(c.level)} — ${esc(c.description)}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="delCourse('${c.id}')">Del</button></td>
+        </tr>
+    `).join('') || '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text3)">No courses found</td></tr>';
+}
+
+async function delCourse(id) {
+    if(!confirm('Delete this course?')) return;
+    const {data} = await api('/api/courses/'+id, 'DELETE');
+    if(data.ok) { toast('Course deleted', 's'); loadCourseList(); loadCourses(); }
+}
+
+async function saveCourse() {
+    const p = {
+        id: document.getElementById('cId').value,
+        title: document.getElementById('cTitle').value,
+        category: document.getElementById('cCat').value,
+        level: document.getElementById('cLevel').value,
+        description: document.getElementById('cDesc').value,
+        icon: document.getElementById('cIcon').value || '📚',
+        color: document.getElementById('cColor').value || '#4f8aff',
+        skills: []
+    };
+    if(!p.id || !p.title) return toast('ID and Title required', 'e');
+    const {data} = await api('/api/courses', 'POST', p);
+    if(data.ok) {
+        toast('Course added', 's');
+        closeOv('courseModal');
+        loadCourseList();
+        loadCourses();
+        ['cId','cTitle','cLevel','cDesc','cIcon','cColor'].forEach(id => document.getElementById(id).value = '');
+    } else toast(data.error || 'Failed', 'e');
+}
 
 // ══════════════════════════════════════════════════════
 //  DATA & FILTERS
@@ -141,8 +219,9 @@ function renderTable() {
             <tr>
                 <td style="color:var(--text3);font-family:'DM Mono',monospace;font-size:11px">${i+1}</td>
                 <td><div class="sname">${esc(x.name)}</div><div class="smeta">${fmtD(x.created_at)}</div></td>
+                <td><span class="cbadge">${esc(x.course || 'None')}</span></td>
                 <td style="color:var(--text2);font-size:13px">${esc(x.school)}</td>
-                <td><span class="cbadge">${esc(x.class)}</span></td>
+                <td><span class="cbadge" style="background:rgba(255,255,255,0.05); color:var(--text2)">${esc(x.class)}</span></td>
                 <td><a href="tel:${esc(x.phone)}" style="color:var(--text2);text-decoration:none;font-size:13px">${esc(x.phone)}</a></td>
                 <td><span class="fee-m">₹${(x.joiningFee||0).toLocaleString()}</span></td>
                 <td><span class="fee-m">₹${(x.monthlyFee||0).toLocaleString()}</span></td>
@@ -188,15 +267,20 @@ function updateFilters() {
 
 async function toggleMonth(id, month) {
     const s = students.find(x => x.id === id); if(!s) return;
-    const old = s.months[month];
-    s.months[month] = !s.months[month];
-    const {data} = await api('/api/students/' + id, 'PUT', s);
-    if(data.ok) {
-        renderTable(); refreshDashboard();
-        toast(`${s.name} — ${month}: ${s.months[month]?'✓ Paid':'✗ Unpaid'}`, s.months[month]?'s':'i');
+    if(!s.months[month]) {
+        currPaySid = id; currPayMonth = month;
+        document.getElementById('payModalTitle').textContent = `Pay Fee: ${s.name} (${month})`;
+        document.getElementById('payAmount').value = s.monthlyFee || 0;
+        document.getElementById('payMonth').value = month;
+        document.getElementById('payRemarks').value = '';
+        openOv('payModal');
     } else {
-        s.months[month] = old;
-        toast('Update failed', 'e');
+        if(!confirm('Revert payment for ' + month + '? This will mark it as unpaid.')) return;
+        s.months[month] = false;
+        const {data} = await api('/api/students/' + id, 'PUT', s);
+        if(data.ok) { 
+            renderTable(); refreshDashboard(); toast('Status reverted to unpaid', 'i'); 
+        }
     }
 }
 
@@ -227,6 +311,7 @@ function renderStudentPortal(s) {
             <div class="fee-summary">
                 <div class="fsum"><div class="fsum-label">Monthly Fee</div><div class="fsum-val">₹${(s.monthlyFee||0).toLocaleString()}</div></div>
                 <div class="fsum"><div class="fsum-label">Joining Fee</div><div class="fsum-val">₹${(s.joiningFee||0).toLocaleString()}</div></div>
+                <div class="fsum"><div class="fsum-label">Course / Track</div><div class="fsum-val" style="color:var(--blue)">${esc(s.course || 'None')}</div></div>
                 <div class="fsum"><div class="fsum-label">Months Paid</div><div class="fsum-val g">${pc} / 12</div></div>
                 <div class="fsum"><div class="fsum-label">Total Paid</div><div class="fsum-val g">₹${(s.totalPaid||0).toLocaleString()}</div></div>
                 <div class="fsum"><div class="fsum-label">Balance Due</div><div class="fsum-val ${tDue>0?'r':'g'}">₹${tDue.toLocaleString()}</div></div>
@@ -250,6 +335,7 @@ async function adminLogin() {
     if(data.ok) {
         curRole = 'admin'; document.getElementById('adminUDisplay').textContent = data.user;
         showPage('adminPage'); showSection('adminDashboardSection');
+        await loadCourses();
         await loadData(); refreshDashboard(); renderTable(); updateFilters();
         toast('Welcome, ' + data.user + '!', 's');
     } else toast(data.error || 'Login failed', 'e');
@@ -279,6 +365,7 @@ async function restoreSession() {
         if(data.user.role === 'admin') {
             curRole = 'admin'; document.getElementById('adminUDisplay').textContent = data.user.user_id;
             showPage('adminPage'); showSection('adminDashboardSection');
+            await loadCourses();
             await loadData(); refreshDashboard(); renderTable(); updateFilters();
             return true;
         } else if(data.user.role === 'student') {
@@ -304,10 +391,12 @@ async function openEditModal(id) {
     document.getElementById('fName').value = s.name; document.getElementById('fSchool').value = s.school;
     document.getElementById('fClass').value = s.class; document.getElementById('fPhone').value = s.phone;
     document.getElementById('fJoining').value = s.joiningFee || ''; document.getElementById('fMonthly').value = s.monthlyFee || '';
+    document.getElementById('fCourse').value = s.course_id || '';
     openOv('stuModal');
 }
 
 async function saveStudent() {
+    const sel = document.getElementById('fCourse');
     const p = {
         name: document.getElementById('fName').value,
         school: document.getElementById('fSchool').value,
@@ -315,10 +404,18 @@ async function saveStudent() {
         phone: document.getElementById('fPhone').value,
         joiningFee: Number(document.getElementById('fJoining').value),
         monthlyFee: Number(document.getElementById('fMonthly').value),
+        course_id: sel.value,
+        course: sel.options[sel.selectedIndex]?.text || '',
         months: fmM
     };
     const res = await api('/api/students' + (editId ? '/' + editId : ''), editId ? 'PUT' : 'POST', p);
-    if(res.data.ok) { toast('Student saved', 's'); closeOv('stuModal'); await loadData(); renderTable(); refreshDashboard(); }
+    if(res.data.ok) { 
+        toast('Student saved', 's'); 
+        closeOv('stuModal'); 
+        await loadData(); 
+        renderTable(); 
+        refreshDashboard(); 
+    }
     else toast(res.data.error || 'Failed to save', 'e');
 }
 async function confirmDelete() {
@@ -349,13 +446,21 @@ async function saveExam() {
 //  ATTENDANCE & MARKS
 // ══════════════════════════════════════════════════════
 async function loadAttendance() {
-    const d = document.getElementById('attDate').value; if(!d) return;
+    let d = document.getElementById('attDate').value; 
+    if(!d) {
+        d = new Date().toISOString().split('T')[0];
+        document.getElementById('attDate').value = d;
+    }
     const [sRes, aRes] = await Promise.all([api('/api/students'), api('/api/attendance?date='+d)]);
     if(sRes.data.ok && aRes.data.ok) {
         const attMap = {}; aRes.data.attendance.forEach(a => attMap[a.student_id] = a.status);
         document.getElementById('attTableBody').innerHTML = sRes.data.students.map(s => `
             <tr>
-                <td>${esc(s.name)}</td><td>${esc(s.class)}</td>
+                <td><strong>${esc(s.name)}</strong></td>
+                <td><span class="cbadge" style="background:rgba(99,102,241,0.1); color:var(--blue)">${esc(s.course_title || s.course || 'General')}</span></td>
+                <td>${esc(s.class)}</td>
+                <td>${(s.totalPaid||0).toLocaleString()} / ${((s.monthlyFee||0)*12).toLocaleString()}</td>
+                <td>${s.recent_payment || '—'}</td>
                 <td><div class="att-box" style="margin:0;"><div class="att-btn p ${attMap[s.id]==='P'?'act':''}" onclick="setAtt('${s.id}','P')">P</div><div class="att-btn a ${attMap[s.id]==='A'?'act':''}" onclick="setAtt('${s.id}','A')">A</div></div></td>
             </tr>
         `).join('');
@@ -547,7 +652,69 @@ async function submitMarks() {
     if(data.ok) { toast('Marks saved!', 's'); closeOv('marksModal'); }
 }
 
-function confirmPayment() {
-    toast('Payment processed', 's');
-    closeOv('payModal');
+async function confirmPayment() {
+    if(!currPaySid || !currPayMonth) return;
+    const amount = Number(document.getElementById('payAmount').value);
+    const mode = document.getElementById('payMode').value;
+    const remarks = document.getElementById('payRemarks').value;
+    
+    const {data} = await api(`/api/students/${currPaySid}/pay`, 'POST', {
+        month: currPayMonth,
+        amount: amount,
+        mode: mode,
+        remarks: remarks
+    });
+    
+    if(data && data.ok) {
+        toast('Payment processed successfully!', 's');
+        closeOv('payModal');
+        await loadData();
+        renderTable();
+        refreshDashboard();
+        
+        // If we are in student portal, re-render
+        if(curRole === 'student' && loggedStu && loggedStu.id === currPaySid) {
+            const res = await api('/api/student/me');
+            if(res.data.ok) {
+                loggedStu = res.data.student;
+                renderStudentPortal(loggedStu);
+            }
+        }
+        
+        // Show receipt option
+        const s = students.find(x => x.id === currPaySid);
+        showReceiptPrompt({
+            id: data.receipt_id,
+            student: s?.name || 'Student',
+            month: currPayMonth,
+            amount: amount,
+            mode: mode,
+            date: new Date().toISOString()
+        });
+    } else {
+        toast(data?.error || 'Payment failed', 'e');
+    }
 }
+
+function printReceipt(p) {
+    const r = document.getElementById('receiptTemplate');
+    if(!r) return;
+    document.getElementById('rctStudent').textContent = p.student;
+    document.getElementById('rctDate').textContent = fmtD(p.date);
+    document.getElementById('rctDesc').textContent = `Monthly Fee - ${p.month}`;
+    document.getElementById('rctAmount').textContent = p.amount.toLocaleString();
+    document.getElementById('rctMode').textContent = p.mode;
+    document.getElementById('rctId').textContent = p.id;
+    
+    const win = window.open('', '_blank');
+    win.document.write(`<html><head><title>Receipt_${p.id}</title>`);
+    win.document.write(`<style>body{font-family:serif;padding:40px;color:#000;background:#fff;} hr{border:none;border-top:1px solid #eee;margin:20px 0;} table{width:100%;border-collapse:collapse;} th,td{padding:10px;border-bottom:1px solid #eee;}</style>`);
+    win.document.write('</head><body>');
+    win.document.write(r.innerHTML);
+    win.document.write('</body></html>');
+    win.document.close();
+    win.print();
+}
+
+function showReceiptPrompt(p) { pendingReceipt = p; openOv('receiptPromptModal'); }
+function doPrint() { if(pendingReceipt) printReceipt(pendingReceipt); closeOv('receiptPromptModal'); }
