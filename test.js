@@ -66,7 +66,7 @@ function showExams() { showSection('examsSection'); loadExams(); }
 function showSettings() { showSection('settingsSection'); }
 function showAttendance() { showSection('attendanceSection'); loadAttendance(); }
 function showExpenses() { showSection('expenseSection'); loadExpenses(); }
-function showCourses() { showSection('adminCoursesSection'); loadCourseList(); }
+function showCourses() { showSection('adminCoursesSection'); loadCourses(); }
 
 function openOv(id) { document.getElementById(id).classList.add('open'); }
 function closeOv(id) { document.getElementById(id).classList.remove('open'); }
@@ -134,22 +134,7 @@ function renderCourses() {
     `).join('') || '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text3)">No courses found</td></tr>';
 }
 
-function showCourses() { showSection('adminCoursesSection'); loadCourses(); }
 
-async function loadCourseList() {
-    const {data} = await api('/api/courses');
-    if(!data.ok) return;
-    document.getElementById('courseTableBody').innerHTML = data.courses.map(c => `
-        <tr>
-            <td style="font-size:24px">${c.icon || '📚'}</td>
-            <td><code>${esc(c.id)}</code></td>
-            <td><strong>${esc(c.title)}</strong></td>
-            <td><span class="cbadge" style="background:${c.color}20; color:${c.color}">${esc(c.category.toUpperCase())}</span></td>
-            <td>${esc(c.level)} — ${esc(c.description)}</td>
-            <td><button class="btn btn-danger btn-sm" onclick="delCourse('${c.id}')">Del</button></td>
-        </tr>
-    `).join('') || '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text3)">No courses found</td></tr>';
-}
 
 async function delCourse(id) {
     if(!confirm('Delete this course?')) return;
@@ -383,15 +368,27 @@ async function restoreSession() {
 // ══════════════════════════════════════════════════════
 //  MODALS & CRUD
 // ══════════════════════════════════════════════════════
-function openAddModal() { editId=null; fmM=defM(); document.getElementById('modalTitle').textContent='Add Student'; clearForm(); openOv('stuModal'); }
+function openAddModal() { 
+    editId=null; fmM=defM(); 
+    document.getElementById('modalTitle').textContent='Add Student'; 
+    clearForm(); 
+    loadCourses(); // Ensure dropdown is populated
+    openOv('stuModal'); 
+}
 async function openEditModal(id) {
     const s = students.find(x => x.id === id); if(!s) return;
     editId = id; fmM = {...s.months};
     document.getElementById('modalTitle').textContent = 'Edit — ' + s.name;
-    document.getElementById('fName').value = s.name; document.getElementById('fSchool').value = s.school;
-    document.getElementById('fClass').value = s.class; document.getElementById('fPhone').value = s.phone;
-    document.getElementById('fJoining').value = s.joiningFee || ''; document.getElementById('fMonthly').value = s.monthlyFee || '';
+    document.getElementById('fName').value = s.name; 
+    document.getElementById('fSchool').value = s.school;
+    document.getElementById('fClass').value = s.class; 
+    document.getElementById('fPhone').value = s.phone;
+    document.getElementById('fJoining').value = s.joiningFee || ''; 
+    document.getElementById('fMonthly').value = s.monthlyFee || '';
+    
+    await loadCourses(); // Ensure dropdown is populated before setting value
     document.getElementById('fCourse').value = s.course_id || '';
+    
     openOv('stuModal');
 }
 
