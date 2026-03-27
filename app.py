@@ -22,8 +22,12 @@ DATABASE_URL = os.environ.get("DATABASE_URL") # Provided by Render.com
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "tuition.db")
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
-app = Flask(__name__)
+app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
+
+@app.route("/api/vms-check")
+def vms_check():
+    return jsonify({"ok": True, "version": "1.0.2", "status": "VMS Updates Active"})
 app.secret_key = secrets.token_hex(32)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
